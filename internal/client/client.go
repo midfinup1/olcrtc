@@ -460,7 +460,7 @@ func (c *Client) socks5Request(conn net.Conn) (string, int, error) {
 }
 
 func (c *Client) pumpToMux(sid uint16, conn net.Conn) {
-	buf := make([]byte, 16384)
+	buf := make([]byte, 65536)
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {

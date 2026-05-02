@@ -596,7 +596,7 @@ func (s *Server) pumpToMux(sid uint16, conn net.Conn) {
 	}()
 	defer close(statsStop)
 
-	buf := make([]byte, 16384)
+	buf := make([]byte, 65536)
 
 	// Idle timeout for genuinely dead upstreams. Only armed when we are
 	// actively waiting on the socket (queue has space). During internal

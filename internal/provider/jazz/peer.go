@@ -21,7 +21,7 @@ import (
 
 const (
 	maxDataChannelMessageSize = 12288
-	sendDelay                 = 2 * time.Millisecond
+	sendDelay                 =  0 //2 * time.Millisecond
 )
 
 // Peer represents a SaluteJazz WebRTC connection.
