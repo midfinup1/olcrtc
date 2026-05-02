@@ -13,14 +13,24 @@ SOCKS_PORT="8808"
 
 BRANCH="master"
 LINK_TYPE="direct"
-TRANSPORT_TYPE="datachannel"
+TRANSPORT_TYPE="videochannel"
 DATA_DIR="/app/data"
 DNS_SERVER="1.1.1.1:53"
+
+VIDEO_W="1280"
+VIDEO_H="720"
+VIDEO_FPS="10"
+VIDEO_BITRATE="1000k"
+VIDEO_CODEC="qrcode"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --branch=*)
             BRANCH="${1#*=}"
+            shift
+            ;;
+        --transport=*)
+            TRANSPORT_TYPE="${1#*=}"
             shift
             ;;
         *)
@@ -33,6 +43,7 @@ echo "=== OlcRTC Client Deployment Script ==="
 echo ""
 echo "[*] Using branch: $BRANCH"
 echo "[*] Using workspace: $WORK_DIR"
+echo "[*] Using transport: $TRANSPORT_TYPE"
 echo ""
 
 if ! command -v podman &> /dev/null; then
@@ -156,6 +167,32 @@ if [ ! -f "$WORK_DIR/olcrtc" ]; then
     exit 1
 fi
 
+OLCRTC_ARGS=(
+    -mode cnc
+    -link "$LINK_TYPE"
+    -transport "$TRANSPORT_TYPE"
+    -provider "$PROVIDER"
+    -id "$ROOM_ID"
+    -key "$KEY"
+    -data "$DATA_DIR"
+    -dns "$DNS_SERVER"
+)
+
+if [ "$TRANSPORT_TYPE" = "videochannel" ]; then
+    OLCRTC_ARGS+=(
+        -video-w "$VIDEO_W"
+        -video-h "$VIDEO_H"
+        -video-fps "$VIDEO_FPS"
+        -video-bitrate "$VIDEO_BITRATE"
+        -video-codec "$VIDEO_CODEC"
+    )
+fi
+
+OLCRTC_ARGS+=(
+    -socks-port "$SOCKS_PORT"
+    -socks-host 0.0.0.0
+)
+
 echo "[*] Starting OlcRTC client..."
 
 podman run -d \
@@ -165,17 +202,7 @@ podman run -d \
     -v "$WORK_DIR:/app" \
     -w /app \
     "$IMAGE_NAME" \
-    ./olcrtc \
-        -mode cnc \
-        -link "$LINK_TYPE" \
-        -transport "$TRANSPORT_TYPE" \
-        -provider "$PROVIDER" \
-        -id "$ROOM_ID" \
-        -key "$KEY" \
-        -data "$DATA_DIR" \
-        -dns "$DNS_SERVER" \
-        -socks-port "$SOCKS_PORT" \
-        -socks-host 0.0.0.0
+    ./olcrtc "${OLCRTC_ARGS[@]}"
 
 sleep 2
 
@@ -190,6 +217,15 @@ echo "Link:           $LINK_TYPE"
 echo "Transport:      $TRANSPORT_TYPE"
 echo "Data dir:       $DATA_DIR"
 echo "DNS:            $DNS_SERVER"
+
+if [ "$TRANSPORT_TYPE" = "videochannel" ]; then
+    echo "Video width:    $VIDEO_W"
+    echo "Video height:   $VIDEO_H"
+    echo "Video fps:      $VIDEO_FPS"
+    echo "Video bitrate:  $VIDEO_BITRATE"
+    echo "Video codec:    $VIDEO_CODEC"
+fi
+
 echo ""
 echo "View logs:"
 echo "  podman logs -f $CONTAINER_NAME"
@@ -198,6 +234,6 @@ echo "Stop client:"
 echo "  podman stop $CONTAINER_NAME"
 echo ""
 echo "Test proxy:"
-echo "  export all_proxy=socks5h://$SOCKS_IP:$SOCKS_PORT"
-echo "  curl -fsSL https://ifconfig.me"
+echo "  curl --max-time 20 -v --socks5-hostname $SOCKS_IP:$SOCKS_PORT http://example.com"
+echo "  curl --max-time 20 -v --socks5-hostname $SOCKS_IP:$SOCKS_PORT https://ifconfig.me"
 echo ""

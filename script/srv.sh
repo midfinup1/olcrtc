@@ -10,14 +10,24 @@ WORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 BRANCH="master"
 LINK_TYPE="direct"
-TRANSPORT_TYPE="datachannel"
+TRANSPORT_TYPE="videochannel"
 DATA_DIR="/app/data"
 DNS_SERVER="1.1.1.1:53"
+
+VIDEO_W="1280"
+VIDEO_H="720"
+VIDEO_FPS="10"
+VIDEO_BITRATE="1000k"
+VIDEO_CODEC="qrcode"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --branch=*)
             BRANCH="${1#*=}"
+            shift
+            ;;
+        --transport=*)
+            TRANSPORT_TYPE="${1#*=}"
             shift
             ;;
         *)
@@ -30,27 +40,25 @@ echo "=== OlcRTC Server Deployment Script ==="
 echo ""
 echo "[*] Using branch: $BRANCH"
 echo "[*] Using workspace: $WORK_DIR"
+echo "[*] Using transport: $TRANSPORT_TYPE"
 echo ""
 
 if ! command -v podman &> /dev/null; then
     echo "[X] Podman is not installed."
-    echo "Install Podman Desktop or install Podman manually:"
-    echo "  brew install podman"
-    echo "  podman machine init"
-    echo "  podman machine start"
+    echo "Install Podman manually:"
+    echo "  sudo apt update"
+    echo "  sudo apt install -y podman"
     exit 1
 fi
 
 echo "[+] Using Podman"
 
 if ! podman info &> /dev/null; then
-    echo "[X] Podman is installed, but Podman machine is not running."
-    echo "Run:"
-    echo "  podman machine start"
+    echo "[X] Podman is installed, but it is not working correctly."
     exit 1
 fi
 
-echo "[+] Podman machine is running"
+echo "[+] Podman is working"
 echo ""
 
 if [ ! -f "$WORK_DIR/go.mod" ]; then
@@ -154,12 +162,17 @@ EXTRA_ARGS=()
 
 if [[ "$USE_PROXY" =~ ^[Yy]$ ]]; then
     echo ""
-    echo "If SOCKS5 proxy is running on your Mac, use:"
-    echo "  host.containers.internal"
+    echo "Use this only if the VPS itself must go through another external SOCKS5 proxy."
+    echo "Usually on VPS you should answer N."
     echo ""
 
-    read -p "Enter SOCKS5 proxy address [default: host.containers.internal]: " PROXY_ADDR_INPUT
-    SOCKS_PROXY_ADDR=${PROXY_ADDR_INPUT:-host.containers.internal}
+    read -p "Enter SOCKS5 proxy address: " PROXY_ADDR_INPUT
+    SOCKS_PROXY_ADDR="$PROXY_ADDR_INPUT"
+
+    if [ -z "$SOCKS_PROXY_ADDR" ]; then
+        echo "[X] SOCKS5 proxy address cannot be empty"
+        exit 1
+    fi
 
     read -p "Enter SOCKS5 proxy port [default: 1080]: " PROXY_PORT_INPUT
     SOCKS_PROXY_PORT=${PROXY_PORT_INPUT:-1080}
@@ -211,24 +224,39 @@ else
     echo ""
 fi
 
+OLCRTC_ARGS=(
+    -mode srv
+    -link "$LINK_TYPE"
+    -transport "$TRANSPORT_TYPE"
+    -provider "$PROVIDER"
+    -id "$ROOM_ID"
+    -key "$KEY"
+    -data "$DATA_DIR"
+    -dns "$DNS_SERVER"
+)
+
+if [ "$TRANSPORT_TYPE" = "videochannel" ]; then
+    OLCRTC_ARGS+=(
+        -video-w "$VIDEO_W"
+        -video-h "$VIDEO_H"
+        -video-fps "$VIDEO_FPS"
+        -video-bitrate "$VIDEO_BITRATE"
+        -video-codec "$VIDEO_CODEC"
+    )
+fi
+
+OLCRTC_ARGS+=("${EXTRA_ARGS[@]}")
+
 echo "[*] Starting OlcRTC server..."
 
 podman run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
+    --network host \
     -v "$WORK_DIR:/app" \
     -w /app \
     "$IMAGE_NAME" \
-    ./olcrtc \
-        -mode srv \
-        -link "$LINK_TYPE" \
-        -transport "$TRANSPORT_TYPE" \
-        -provider "$PROVIDER" \
-        -id "$ROOM_ID" \
-        -key "$KEY" \
-        -data "$DATA_DIR" \
-        -dns "$DNS_SERVER" \
-        "${EXTRA_ARGS[@]}"
+    ./olcrtc "${OLCRTC_ARGS[@]}"
 
 sleep 3
 
@@ -278,10 +306,21 @@ echo "Transport:      $TRANSPORT_TYPE"
 echo "Data dir:       $DATA_DIR"
 echo "DNS:            $DNS_SERVER"
 
+if [ "$TRANSPORT_TYPE" = "videochannel" ]; then
+    echo "Video width:    $VIDEO_W"
+    echo "Video height:   $VIDEO_H"
+    echo "Video fps:      $VIDEO_FPS"
+    echo "Video bitrate:  $VIDEO_BITRATE"
+    echo "Video codec:    $VIDEO_CODEC"
+fi
+
 if [ ${#EXTRA_ARGS[@]} -gt 0 ]; then
     echo "SOCKS5 proxy:   $SOCKS_PROXY_ADDR:$SOCKS_PROXY_PORT"
 fi
 
+echo ""
+echo "Check network mode:"
+echo "  podman inspect $CONTAINER_NAME --format '{{.HostConfig.NetworkMode}}'"
 echo ""
 echo "View logs:"
 echo "  podman logs -f $CONTAINER_NAME"
@@ -289,6 +328,9 @@ echo ""
 echo "Stop server:"
 echo "  podman stop $CONTAINER_NAME"
 echo ""
-echo "Client command:"
-echo "  ./olcrtc -mode cnc -link \"$LINK_TYPE\" -transport \"$TRANSPORT_TYPE\" -provider \"$PROVIDER\" -id \"$ACTUAL_ROOM_ID\" -key \"$KEY\" -data ./data -dns \"$DNS_SERVER\" -socks-port 8808 -socks-host 127.0.0.1"
+echo "Client values:"
+echo "  Provider:       $PROVIDER"
+echo "  Room ID:        $ACTUAL_ROOM_ID"
+echo "  Encryption key: $KEY"
+echo "  Transport:      $TRANSPORT_TYPE"
 echo ""
