@@ -13,12 +13,12 @@ SOCKS_PORT="8808"
 
 BRANCH="master"
 LINK_TYPE="direct"
-TRANSPORT_TYPE="videochannel"
+TRANSPORT_TYPE="datachannel"
 DATA_DIR="/app/data"
 DNS_SERVER="1.1.1.1:53"
 
-VIDEO_W="1280"
-VIDEO_H="720"
+VIDEO_W="1080"
+VIDEO_H="1080"
 VIDEO_FPS="10"
 VIDEO_BITRATE="1000k"
 VIDEO_CODEC="tile"
@@ -161,7 +161,7 @@ podman run --rm \
     -v "$WORK_DIR:/app" \
     -w /app \
     "$IMAGE_NAME" \
-    sh -c "apk add --no-cache ffmpeg ca-certificates git openssl && go build -o olcrtc cmd/olcrtc/main.go"
+    sh -c "go build -o olcrtc cmd/olcrtc/main.go"
 
 if [ ! -f "$WORK_DIR/olcrtc" ]; then
     echo "[X] Build failed"
@@ -197,14 +197,25 @@ OLCRTC_ARGS+=(
 
 echo "[*] Starting OlcRTC client..."
 
-podman run -d \
-    --name "$CONTAINER_NAME" \
-    --restart unless-stopped \
-    -p "$SOCKS_IP:$SOCKS_PORT:$SOCKS_PORT" \
-    -v "$WORK_DIR:/app" \
-    -w /app \
-    "$IMAGE_NAME" \
-    sh -c 'apk add --no-cache ffmpeg ca-certificates git openssl >/dev/null && ./olcrtc "$@"' -- "${OLCRTC_ARGS[@]}"
+if [ "$TRANSPORT_TYPE" = "videochannel" ]; then
+    podman run -d \
+        --name "$CONTAINER_NAME" \
+        --restart unless-stopped \
+        -p "$SOCKS_IP:$SOCKS_PORT:$SOCKS_PORT" \
+        -v "$WORK_DIR:/app" \
+        -w /app \
+        "$IMAGE_NAME" \
+        sh -c 'apk add --no-cache ffmpeg ca-certificates git openssl >/dev/null && ./olcrtc "$@"' -- "${OLCRTC_ARGS[@]}"
+else
+    podman run -d \
+        --name "$CONTAINER_NAME" \
+        --restart unless-stopped \
+        -p "$SOCKS_IP:$SOCKS_PORT:$SOCKS_PORT" \
+        -v "$WORK_DIR:/app" \
+        -w /app \
+        "$IMAGE_NAME" \
+        ./olcrtc "${OLCRTC_ARGS[@]}"
+fi
 
 sleep 2
 
@@ -239,4 +250,5 @@ echo ""
 echo "Test proxy:"
 echo "  curl --max-time 20 -v --socks5-hostname $SOCKS_IP:$SOCKS_PORT http://example.com"
 echo "  curl --max-time 20 -v --socks5-hostname $SOCKS_IP:$SOCKS_PORT https://ifconfig.me"
+echo "  curl --socks5-hostname $SOCKS_IP:$SOCKS_PORT -o /dev/null -w 'download: %{speed_download} bytes/sec\n' 'https://speed.cloudflare.com/__down?bytes=10000000'"
 echo ""
