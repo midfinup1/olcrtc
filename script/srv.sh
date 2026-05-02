@@ -18,7 +18,7 @@ VIDEO_W="1280"
 VIDEO_H="720"
 VIDEO_FPS="10"
 VIDEO_BITRATE="1000k"
-VIDEO_CODEC="qrcode"
+VIDEO_CODEC="tile"
 VIDEO_HW="none"
 
 while [[ $# -gt 0 ]]; do
