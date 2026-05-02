@@ -185,6 +185,7 @@ if [ "$TRANSPORT_TYPE" = "videochannel" ]; then
         -video-fps "$VIDEO_FPS"
         -video-bitrate "$VIDEO_BITRATE"
         -video-codec "$VIDEO_CODEC"
+        -video-hw none
     )
 fi
 
