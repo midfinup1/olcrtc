@@ -19,6 +19,7 @@ VIDEO_H="720"
 VIDEO_FPS="10"
 VIDEO_BITRATE="1000k"
 VIDEO_CODEC="qrcode"
+VIDEO_HW="none"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -198,7 +199,7 @@ podman run --rm \
     -v "$WORK_DIR:/app" \
     -w /app \
     "$IMAGE_NAME" \
-    sh -c "go build -o olcrtc cmd/olcrtc/main.go"
+    sh -c "apk add --no-cache ffmpeg ca-certificates git openssl && go build -o olcrtc cmd/olcrtc/main.go"
 
 if [ ! -f "$WORK_DIR/olcrtc" ]; then
     echo "[X] Build failed"
@@ -242,7 +243,7 @@ if [ "$TRANSPORT_TYPE" = "videochannel" ]; then
         -video-fps "$VIDEO_FPS"
         -video-bitrate "$VIDEO_BITRATE"
         -video-codec "$VIDEO_CODEC"
-        -video-hw none
+        -video-hw "$VIDEO_HW"
     )
 fi
 
@@ -257,7 +258,7 @@ podman run -d \
     -v "$WORK_DIR:/app" \
     -w /app \
     "$IMAGE_NAME" \
-    ./olcrtc "${OLCRTC_ARGS[@]}"
+    sh -c 'apk add --no-cache ffmpeg ca-certificates git openssl >/dev/null && ./olcrtc "$@"' -- "${OLCRTC_ARGS[@]}"
 
 sleep 3
 
@@ -313,6 +314,7 @@ if [ "$TRANSPORT_TYPE" = "videochannel" ]; then
     echo "Video fps:      $VIDEO_FPS"
     echo "Video bitrate:  $VIDEO_BITRATE"
     echo "Video codec:    $VIDEO_CODEC"
+    echo "Video hw:       $VIDEO_HW"
 fi
 
 if [ ${#EXTRA_ARGS[@]} -gt 0 ]; then
