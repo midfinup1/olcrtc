@@ -347,4 +347,20 @@ echo "  Provider:       $PROVIDER"
 echo "  Room ID:        $ACTUAL_ROOM_ID"
 echo "  Encryption key: $KEY"
 echo "  Transport:      $TRANSPORT_TYPE"
+
+CONNECTION_FILE="$WORK_DIR/connection.env"
+
+cat > "$CONNECTION_FILE" <<EOF
+PROVIDER="$PROVIDER"
+ROOM_ID="$ACTUAL_ROOM_ID"
+ENCRYPTION_KEY="$KEY"
+TRANSPORT_TYPE="$TRANSPORT_TYPE"
+DNS_SERVER="$DNS_SERVER"
+EOF
+
+chmod 600 "$CONNECTION_FILE"
+
+echo ""
+echo "Connection file saved:"
+echo "  $CONNECTION_FILE"
 echo ""
