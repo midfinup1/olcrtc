@@ -13,7 +13,6 @@ import (
 
 	"github.com/openlibrecommunity/olcrtc/internal/app/session"
 	"github.com/openlibrecommunity/olcrtc/internal/logger"
-	"github.com/openlibrecommunity/olcrtc/internal/names"
 )
 
 type config struct {
@@ -31,18 +30,6 @@ type config struct {
 	dnsServer      string
 	socksProxyAddr string
 	socksProxyPort int
-	videoWidth     int
-	videoHeight    int
-	videoFPS       int
-	videoBitrate   string
-	videoHW        string
-	videoQRSize     int
-	videoQRRecovery string
-	videoCodec      string
-	videoTileModule int
-	videoTileRS     int
-	vp8FPS          int
-	vp8BatchSize    int
 }
 
 func main() {
@@ -58,20 +45,8 @@ func run() error {
 	cfg := parseFlags()
 	configureLogging(cfg.debug)
 
-	if err := session.Validate(toSessionConfig(cfg)); err != nil {
-		return err
-	}
-
-	if cfg.dataDir == "" {
-		return fmt.Errorf("data directory required (use -data data)")
-	}
-
-	dataDir, err := resolveDataDir(cfg.dataDir)
-	if err != nil {
-		return err
-	}
-
-	if err := loadNames(dataDir); err != nil {
+	sessionCfg := toSessionConfig(cfg)
+	if err := session.Validate(sessionCfg); err != nil {
 		return err
 	}
 
@@ -83,7 +58,7 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- session.Run(ctx, toSessionConfig(cfg))
+		errCh <- session.Run(ctx, sessionCfg)
 	}()
 
 	select {
@@ -100,31 +75,20 @@ func parseFlags() config {
 	cfg := config{}
 
 	flag.StringVar(&cfg.mode, "mode", "", "Mode: srv or cnc")
-	flag.StringVar(&cfg.link, "link", "", "Link: direct (p2p connection type)")
-	flag.StringVar(&cfg.transport, "transport", "", "Transport: datachannel, videochannel, seichannel")
-	flag.StringVar(&cfg.carrier, "carrier", "", "Carrier: telemost, jazz, wbstream")
-	flag.StringVar(&cfg.roomID, "id", "", "Room ID")
+	flag.StringVar(&cfg.link, "link", session.DefaultLink, "Link: direct")
+	flag.StringVar(&cfg.transport, "transport", session.DefaultTransport, "Transport: datachannel")
+	flag.StringVar(&cfg.carrier, "carrier", "", "Carrier: jazz or wbstream")
 	flag.StringVar(&cfg.provider, "provider", "", "Deprecated alias for -carrier")
-	flag.IntVar(&cfg.socksPort, "socks-port", 0, "SOCKS5 port (client only)")
-	flag.StringVar(&cfg.socksHost, "socks-host", "", "SOCKS5 listen host (client only)")
-	flag.StringVar(&cfg.keyHex, "key", "", "Shared encryption key (hex)")
+	flag.StringVar(&cfg.roomID, "id", "", "Room ID")
+	flag.StringVar(&cfg.keyHex, "key", "", "Shared encryption key as 64 hex characters")
+	flag.StringVar(&cfg.socksHost, "socks-host", session.DefaultSOCKSHost, "SOCKS5 listen host (client only)")
+	flag.IntVar(&cfg.socksPort, "socks-port", session.DefaultSOCKSPort, "SOCKS5 listen port (client only)")
+	flag.StringVar(&cfg.dataDir, "data", session.DefaultDataDir, "Path to data directory")
+	flag.StringVar(&cfg.dnsServer, "dns", session.DefaultDNSServer, "DNS server (for example 1.1.1.1:53)")
+	flag.StringVar(&cfg.socksProxyAddr, "socks-proxy", "", "SOCKS5 proxy address for server egress")
+	flag.IntVar(&cfg.socksProxyPort, "socks-proxy-port", 0, "SOCKS5 proxy port for server egress")
 	flag.BoolVar(&cfg.debug, "debug", false, "Enable verbose logging")
-	flag.StringVar(&cfg.dataDir, "data", "", "Path to data directory")
-	flag.StringVar(&cfg.dnsServer, "dns", "", "DNS server (e.g. 1.1.1.1:53)")
-	flag.StringVar(&cfg.socksProxyAddr, "socks-proxy", "", "SOCKS5 proxy address (server only)")
-	flag.IntVar(&cfg.socksProxyPort, "socks-proxy-port", 0, "SOCKS5 proxy port (server only)")
-	flag.IntVar(&cfg.videoWidth, "video-w", 0, "Video logical width (videochannel only)")
-	flag.IntVar(&cfg.videoHeight, "video-h", 0, "Video logical height (videochannel only)")
-	flag.IntVar(&cfg.videoFPS, "video-fps", 0, "Video frames per second (videochannel only)")
-	flag.StringVar(&cfg.videoBitrate, "video-bitrate", "", "Video bitrate (videochannel only)")
-	flag.StringVar(&cfg.videoHW, "video-hw", "", "Hardware acceleration (none, nvenc)")
-	flag.IntVar(&cfg.videoQRSize, "video-qr-size", 0, "Video QR code fragment size (videochannel only)")
-	flag.StringVar(&cfg.videoQRRecovery, "video-qr-recovery", "low", "QR error correction: low (7%), medium (15%), high (25%), highest (30%)")
-	flag.StringVar(&cfg.videoCodec, "video-codec", "qrcode", "Visual codec: qrcode or tile")
-	flag.IntVar(&cfg.videoTileModule, "video-tile-module", 0, "Tile module size in pixels 1..270 (videochannel tile only, default 4)")
-	flag.IntVar(&cfg.videoTileRS, "video-tile-rs", 0, "Tile Reed-Solomon parity percent 0..200 (videochannel tile only, default 20)")
-	flag.IntVar(&cfg.vp8FPS, "vp8-fps", 0, "VP8 frames per second (vp8channel only, default 25)")
-	flag.IntVar(&cfg.vp8BatchSize, "vp8-batch", 0, "VP8 frames per tick (vp8channel only, default 1)")
+
 	flag.Parse()
 
 	return cfg
@@ -137,6 +101,10 @@ func configureLogging(debug bool) {
 }
 
 func resolveDataDir(dataDir string) (string, error) {
+	if dataDir == "" {
+		return "", fmt.Errorf("data directory required (use -data data)")
+	}
+
 	if filepath.IsAbs(dataDir) {
 		return dataDir, nil
 	}
@@ -147,16 +115,6 @@ func resolveDataDir(dataDir string) (string, error) {
 	}
 
 	return filepath.Join(filepath.Dir(exePath), dataDir), nil
-}
-
-func loadNames(dataDir string) error {
-	namesPath := filepath.Join(dataDir, "names")
-	surnamesPath := filepath.Join(dataDir, "surnames")
-	if err := names.LoadNameFiles(namesPath, surnamesPath); err != nil {
-		return fmt.Errorf("load embedded names override: %w", err)
-	}
-
-	return nil
 }
 
 func toSessionConfig(cfg config) session.Config {
@@ -172,18 +130,6 @@ func toSessionConfig(cfg config) session.Config {
 		DNSServer:      cfg.dnsServer,
 		SOCKSProxyAddr: cfg.socksProxyAddr,
 		SOCKSProxyPort: cfg.socksProxyPort,
-		VideoWidth:     cfg.videoWidth,
-		VideoHeight:    cfg.videoHeight,
-		VideoFPS:       cfg.videoFPS,
-		VideoBitrate:   cfg.videoBitrate,
-		VideoHW:        cfg.videoHW,
-		VideoQRSize:     cfg.videoQRSize,
-		VideoQRRecovery: cfg.videoQRRecovery,
-		VideoCodec:      cfg.videoCodec,
-		VideoTileModule: cfg.videoTileModule,
-		VideoTileRS:     cfg.videoTileRS,
-		VP8FPS:          cfg.vp8FPS,
-		VP8BatchSize:    cfg.vp8BatchSize,
 	}
 }
 
@@ -199,11 +145,7 @@ func firstNonEmpty(values ...string) string {
 func waitForShutdown(errCh <-chan error) error {
 	done := make(chan error, 1)
 	go func() {
-		if err := <-errCh; err != nil {
-			done <- err
-		} else {
-			done <- nil
-		}
+		done <- <-errCh
 	}()
 
 	select {

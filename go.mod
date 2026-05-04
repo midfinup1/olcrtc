@@ -7,12 +7,8 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/livekit/server-sdk-go/v2 v2.16.2
 	github.com/magefile/mage v1.17.1
-	github.com/pion/rtp v1.10.1
 	github.com/pion/webrtc/v4 v4.2.11
-	github.com/zarazaex69/b v0.0.0-20260423064626-c0bd20863b89
-	github.com/zarazaex69/gr v0.0.0-20260430014752-23cca5874aef
 	golang.org/x/crypto v0.50.0
-	golang.org/x/mobile v0.0.0-20260410095206-2cfb76559b7b
 )
 
 require (
@@ -36,13 +32,11 @@ require (
 	github.com/jxskiss/base62 v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/klauspost/reedsolomon v1.13.3 // indirect
 	github.com/lithammer/shortuuid/v4 v4.2.0 // indirect
 	github.com/livekit/mageutil v0.0.0-20250511045019-0f1ff63f7731 // indirect
 	github.com/livekit/mediatransportutil v0.0.0-20251128105421-19c7a7b81c22 // indirect
 	github.com/livekit/protocol v1.45.3 // indirect
 	github.com/livekit/psrpc v0.7.1 // indirect
-	github.com/makiuchi-d/gozxing v0.1.1 // indirect
 	github.com/moby/sys/user v0.4.0 // indirect
 	github.com/nats-io/nats.go v1.48.0 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
@@ -55,6 +49,7 @@ require (
 	github.com/pion/mdns/v2 v2.1.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.16 // indirect
+	github.com/pion/rtp v1.10.1 // indirect
 	github.com/pion/sctp v1.9.4 // indirect
 	github.com/pion/sdp/v3 v3.0.18 // indirect
 	github.com/pion/srtp/v3 v3.0.10 // indirect
@@ -78,14 +73,9 @@ require (
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	rsc.io/qr v0.2.0 // indirect
 )
-
-replace github.com/zarazaex69/gr => ./internal/transport/videochannel/gr

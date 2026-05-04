@@ -6,12 +6,8 @@ import (
 	"errors"
 )
 
-var (
-	// ErrLinkNotFound is returned when a requested link is not registered.
-	ErrLinkNotFound = errors.New("link not found")
-)
+var ErrLinkNotFound = errors.New("link not found")
 
-// Link defines a byte link above a transport.
 type Link interface {
 	Connect(ctx context.Context) error
 	Send(data []byte) error
@@ -23,41 +19,25 @@ type Link interface {
 	CanSend() bool
 }
 
-// Config holds common link configuration.
 type Config struct {
-	Transport    string
-	Carrier      string
-	RoomURL      string
-	Name         string
-	OnData       func([]byte)
-	DNSServer    string
-	ProxyAddr    string
-	ProxyPort    int
-	VideoWidth   int
-	VideoHeight  int
-	VideoFPS     int
-	VideoBitrate string
-	VideoHW      string
-	VideoQRSize     int
-	VideoQRRecovery string
-	VideoCodec      string
-	VideoTileModule int
-	VideoTileRS     int
-	VP8FPS       int
-	VP8BatchSize int
+	Transport string
+	Carrier   string
+	RoomURL   string
+	Name      string
+	OnData    func([]byte)
+	DNSServer string
+	ProxyAddr string
+	ProxyPort int
 }
 
-// Factory creates a link instance.
 type Factory func(ctx context.Context, cfg Config) (Link, error)
 
 var registry = make(map[string]Factory)
 
-// Register adds a link factory to the registry.
 func Register(name string, factory Factory) {
 	registry[name] = factory
 }
 
-// New creates a link instance by name.
 func New(ctx context.Context, name string, cfg Config) (Link, error) {
 	factory, ok := registry[name]
 	if !ok {
@@ -66,7 +46,6 @@ func New(ctx context.Context, name string, cfg Config) (Link, error) {
 	return factory(ctx, cfg)
 }
 
-// Available returns a list of registered link names.
 func Available() []string {
 	names := make([]string, 0, len(registry))
 	for name := range registry {

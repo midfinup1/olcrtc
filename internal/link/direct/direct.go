@@ -13,28 +13,15 @@ type directLink struct {
 	transport transport.Transport
 }
 
-// New creates a direct link that forwards bytes to the selected transport.
 func New(ctx context.Context, cfg link.Config) (link.Link, error) {
 	tr, err := transport.New(ctx, cfg.Transport, transport.Config{
-		Carrier:      cfg.Carrier,
-		RoomURL:      cfg.RoomURL,
-		Name:         cfg.Name,
-		OnData:       cfg.OnData,
-		DNSServer:    cfg.DNSServer,
-		ProxyAddr:    cfg.ProxyAddr,
-		ProxyPort:    cfg.ProxyPort,
-		VideoWidth:   cfg.VideoWidth,
-		VideoHeight:  cfg.VideoHeight,
-		VideoFPS:     cfg.VideoFPS,
-		VideoBitrate: cfg.VideoBitrate,
-		VideoHW:      cfg.VideoHW,
-		VideoQRSize:     cfg.VideoQRSize,
-		VideoQRRecovery: cfg.VideoQRRecovery,
-		VideoCodec:      cfg.VideoCodec,
-		VideoTileModule: cfg.VideoTileModule,
-		VideoTileRS:     cfg.VideoTileRS,
-		VP8FPS:       cfg.VP8FPS,
-		VP8BatchSize: cfg.VP8BatchSize,
+		Carrier:   cfg.Carrier,
+		RoomURL:   cfg.RoomURL,
+		Name:      cfg.Name,
+		OnData:    cfg.OnData,
+		DNSServer: cfg.DNSServer,
+		ProxyAddr: cfg.ProxyAddr,
+		ProxyPort: cfg.ProxyPort,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create transport for direct link: %w", err)

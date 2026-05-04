@@ -74,18 +74,6 @@ func Run(
 	dnsServer,
 	socksProxyAddr string,
 	socksProxyPort int,
-	videoWidth int,
-	videoHeight int,
-	videoFPS int,
-	videoBitrate string,
-	videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule int,
-	videoTileRS int,
-	vp8FPS int,
-	vp8BatchSize int,
 ) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -110,7 +98,7 @@ func Run(
 
 	const linkCount = 1
 	for i := range linkCount {
-		if err := s.addLink(runCtx, linkName, transportName, carrierName, roomURL, i, cancel, videoWidth, videoHeight, videoFPS, videoBitrate, videoHW, videoQRSize, videoQRRecovery, videoCodec, videoTileModule, videoTileRS, vp8FPS, vp8BatchSize); err != nil {
+		if err := s.addLink(runCtx, linkName, transportName, carrierName, roomURL, i, cancel); err != nil {
 			return fmt.Errorf("addLink failed: %w", err)
 		}
 	}
@@ -194,15 +182,6 @@ func (s *Server) addLink(
 	roomURL string,
 	linkID int,
 	cancel context.CancelFunc,
-	videoWidth, videoHeight, videoFPS int,
-	videoBitrate, videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule int,
-	videoTileRS int,
-	vp8FPS int,
-	vp8BatchSize int,
 ) error {
 	ln, err := link.New(ctx, linkName, link.Config{
 		Transport:       transportName,
@@ -213,18 +192,6 @@ func (s *Server) addLink(
 		DNSServer:       s.dnsServer,
 		ProxyAddr:       s.socksProxyAddr,
 		ProxyPort:       s.socksProxyPort,
-		VideoWidth:      videoWidth,
-		VideoHeight:     videoHeight,
-		VideoFPS:        videoFPS,
-		VideoBitrate:    videoBitrate,
-		VideoHW:         videoHW,
-		VideoQRSize:     videoQRSize,
-		VideoQRRecovery: videoQRRecovery,
-		VideoCodec:      videoCodec,
-		VideoTileModule: videoTileModule,
-		VideoTileRS:     videoTileRS,
-		VP8FPS:          vp8FPS,
-		VP8BatchSize:    vp8BatchSize,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create link: %w", err)

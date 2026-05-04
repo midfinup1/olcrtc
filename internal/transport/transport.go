@@ -1,17 +1,21 @@
-// Package transport defines transport abstractions and registry.
 package transport
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"sort"
 )
 
-var (
-	// ErrTransportNotFound is returned when a requested transport is not registered.
-	ErrTransportNotFound = errors.New("transport not found")
-)
+type Config struct {
+	Name      string
+	Carrier   string
+	RoomURL   string
+	OnData    func([]byte)
+	DNSServer string
+	ProxyAddr string
+	ProxyPort int
+}
 
-// Features describes the delivery semantics of a transport.
 type Features struct {
 	Reliable        bool
 	Ordered         bool
@@ -19,66 +23,45 @@ type Features struct {
 	MaxPayloadSize  int
 }
 
-// Transport defines a byte transport independent of the underlying carrier.
 type Transport interface {
 	Connect(ctx context.Context) error
-	Send(data []byte) error
-	Close() error
-	SetReconnectCallback(cb func())
-	SetShouldReconnect(fn func() bool)
-	SetEndedCallback(cb func(string))
-	WatchConnection(ctx context.Context)
+	Send([]byte) error
 	CanSend() bool
+	Close() error
+	
+	WatchConnection(ctx context.Context)
+	SetReconnectCallback(func())
+	SetShouldReconnect(func() bool)
+	SetEndedCallback(func(string))
 	Features() Features
 }
 
-// Config holds common transport configuration.
-type Config struct {
-	Carrier      string
-	RoomURL      string
-	Name         string
-	OnData       func([]byte)
-	DNSServer    string
-	ProxyAddr    string
-	ProxyPort    int
-	VideoWidth   int
-	VideoHeight  int
-	VideoFPS     int
-	VideoBitrate string
-	VideoHW      string
-	VideoQRSize     int
-	VideoQRRecovery string
-	VideoCodec      string
-	VideoTileModule int
-	VideoTileRS     int
-	VP8FPS       int
-	VP8BatchSize int
-}
+type Factory func(context.Context, Config) (Transport, error)
 
-// Factory creates a transport instance.
-type Factory func(ctx context.Context, cfg Config) (Transport, error)
+var factories = map[string]Factory{}
 
-var registry = make(map[string]Factory)
-
-// Register adds a transport factory to the registry.
 func Register(name string, factory Factory) {
-	registry[name] = factory
+	factories[name] = factory
 }
 
-// New creates a transport instance by name.
 func New(ctx context.Context, name string, cfg Config) (Transport, error) {
-	factory, ok := registry[name]
+	factory, ok := factories[name]
 	if !ok {
-		return nil, ErrTransportNotFound
+		return nil, fmt.Errorf("unknown transport: %s", name)
 	}
+
+	cfg.Name = name
 	return factory(ctx, cfg)
 }
 
-// Available returns a list of registered transport names.
 func Available() []string {
-	names := make([]string, 0, len(registry))
-	for name := range registry {
+	names := make([]string, 0, len(factories))
+
+	for name := range factories {
 		names = append(names, name)
 	}
+
+	sort.Strings(names)
+
 	return names
 }

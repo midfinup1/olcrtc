@@ -55,20 +55,8 @@ func Run(
 	dnsServer,
 	socksUser string,
 	socksPass string,
-	videoWidth int,
-	videoHeight int,
-	videoFPS int,
-	videoBitrate string,
-	videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule int,
-	videoTileRS int,
-	vp8FPS int,
-	vp8BatchSize int,
 ) error {
-	return RunWithReady(ctx, linkName, transportName, carrierName, roomURL, keyHex, localAddr, dnsServer, socksUser, socksPass, nil, videoWidth, videoHeight, videoFPS, videoBitrate, videoHW, videoQRSize, videoQRRecovery, videoCodec, videoTileModule, videoTileRS, vp8FPS, vp8BatchSize)
+	return RunWithReady(ctx, linkName, transportName, carrierName, roomURL, keyHex, localAddr, dnsServer, socksUser, socksPass, nil)
 }
 
 // RunWithReady is like Run but accepts a callback that is called when the client is ready.
@@ -84,18 +72,6 @@ func RunWithReady(
 	_ string,
 	_ string,
 	onReady func(),
-	videoWidth int,
-	videoHeight int,
-	videoFPS int,
-	videoBitrate string,
-	videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule int,
-	videoTileRS int,
-	vp8FPS int,
-	vp8BatchSize int,
 ) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -123,7 +99,7 @@ func RunWithReady(
 
 	const linkCount = 1
 	for i := range linkCount {
-		if err := c.addLink(runCtx, linkName, transportName, carrierName, roomURL, i, cancel, dnsServer, "", 0, videoWidth, videoHeight, videoFPS, videoBitrate, videoHW, videoQRSize, videoQRRecovery, videoCodec, videoTileModule, videoTileRS, vp8FPS, vp8BatchSize); err != nil {
+		if err := c.addLink(runCtx, linkName, transportName, carrierName, roomURL, i, cancel, dnsServer, "", 0); err != nil {
 			return fmt.Errorf("addLink failed: %w", err)
 		}
 	}
@@ -224,15 +200,6 @@ func (c *Client) addLink(
 	dnsServer,
 	socksProxyAddr string,
 	socksProxyPort int,
-	videoWidth, videoHeight, videoFPS int,
-	videoBitrate, videoHW string,
-	videoQRSize int,
-	videoQRRecovery string,
-	videoCodec string,
-	videoTileModule int,
-	videoTileRS int,
-	vp8FPS int,
-	vp8BatchSize int,
 ) error {
 	ln, err := link.New(ctx, linkName, link.Config{
 		Transport:       transportName,
@@ -243,18 +210,6 @@ func (c *Client) addLink(
 		DNSServer:       dnsServer,
 		ProxyAddr:       socksProxyAddr,
 		ProxyPort:       socksProxyPort,
-		VideoWidth:      videoWidth,
-		VideoHeight:     videoHeight,
-		VideoFPS:        videoFPS,
-		VideoBitrate:    videoBitrate,
-		VideoHW:         videoHW,
-		VideoQRSize:     videoQRSize,
-		VideoQRRecovery: videoQRRecovery,
-		VideoCodec:      videoCodec,
-		VideoTileModule: videoTileModule,
-		VideoTileRS:     videoTileRS,
-		VP8FPS:          vp8FPS,
-		VP8BatchSize:    vp8BatchSize,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create link: %w", err)
