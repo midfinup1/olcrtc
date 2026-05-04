@@ -80,6 +80,7 @@ podman run -d \
         -transport "$TRANSPORT_TYPE" \
         -provider "$PROVIDER" \
         -key "$KEY" \
+        -id any \ 
         -data "$DATA_DIR" \
         -dns "$DNS_SERVER" >> "$LOG_FILE" 2>&1
 
