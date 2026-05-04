@@ -68,6 +68,7 @@ fi
 echo "[*] Starting olcRTC server..." >> "$LOG_FILE"
 
 podman run -d \
+    --replace \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
     --network host \
@@ -80,7 +81,7 @@ podman run -d \
         -transport "$TRANSPORT_TYPE" \
         -provider "$PROVIDER" \
         -key "$KEY" \
-        -id any \ 
+        -id any \
         -data "$DATA_DIR" \
         -dns "$DNS_SERVER" >> "$LOG_FILE" 2>&1
 
