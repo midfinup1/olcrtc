@@ -33,6 +33,12 @@ LOG_READ_INTERVAL_MS = 500
 DEFAULT_CONFIG_URL = "http://194.58.58.92:8090/connection.json"
 DEFAULT_CONFIG_TOKEN = "3311fe77453c1f36d1ad8535470681595c7bf019cf7831a1797e9ce863932973"
 
+DEFAULT_AUTO_FETCH_CONFIG = False
+
+DEFAULT_PROVIDER = "wbstream"
+DEFAULT_ROOM_ID = ""
+DEFAULT_ENCRYPTION_KEY = ""
+
 DEFAULT_SOCKS_HOST = "127.0.0.1"
 DEFAULT_SOCKS_PORT = 8808
 
@@ -105,10 +111,10 @@ def fetch_connection_http(url: str, token: str) -> dict:
     token = token.strip()
 
     if not url:
-        raise RuntimeError("Config URL is empty. Open Settings and enter Config URL.")
+        raise RuntimeError("Config URL is empty.")
 
     if not token:
-        raise RuntimeError("Config token is empty. Open Settings and enter token.")
+        raise RuntimeError("Config token is empty.")
 
     request = urllib.request.Request(
         url,
@@ -148,9 +154,34 @@ def fetch_connection_http(url: str, token: str) -> dict:
 
     if not provider or not room_id or not encryption_key:
         raise RuntimeError(
-            "connection.json is incomplete. Required fields: "
-            "provider, room_id, encryption_key"
+            "connection.json is incomplete. Required fields: provider, room_id, encryption_key"
         )
+
+    return {
+        "provider": provider,
+        "room_id": room_id,
+        "encryption_key": encryption_key,
+        "dns_server": dns_server,
+    }
+
+
+def validate_manual_config(provider: str, room_id: str, encryption_key: str, dns_server: str) -> dict:
+    provider = provider.strip()
+    room_id = room_id.strip()
+    encryption_key = encryption_key.strip()
+    dns_server = dns_server.strip() or DEFAULT_DNS_SERVER
+
+    if not provider:
+        raise RuntimeError("Provider is empty. Open Settings and enter provider.")
+
+    if provider not in ["wbstream", "jazz"]:
+        raise RuntimeError("Provider must be wbstream or jazz.")
+
+    if not room_id:
+        raise RuntimeError("Room ID is empty. Open Settings and enter Room ID.")
+
+    if not encryption_key:
+        raise RuntimeError("Encryption key is empty. Open Settings and enter key.")
 
     return {
         "provider": provider,
@@ -199,11 +230,27 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Settings")
-        self.resize(520, 260)
+        self.resize(600, 430)
+
+        self.auto_fetch_config_checkbox = QCheckBox("Auto fetch config from server")
+        self.auto_fetch_config_checkbox.setChecked(
+            bool(settings.get("auto_fetch_config", DEFAULT_AUTO_FETCH_CONFIG))
+        )
 
         self.config_url_input = QLineEdit(settings.get("config_url", DEFAULT_CONFIG_URL))
+
         self.config_token_input = QLineEdit(settings.get("config_token", DEFAULT_CONFIG_TOKEN))
         self.config_token_input.setEchoMode(QLineEdit.Password)
+
+        self.provider_input = QLineEdit(settings.get("provider", DEFAULT_PROVIDER))
+        self.room_id_input = QLineEdit(settings.get("room_id", DEFAULT_ROOM_ID))
+
+        self.encryption_key_input = QLineEdit(
+            settings.get("encryption_key", DEFAULT_ENCRYPTION_KEY)
+        )
+        self.encryption_key_input.setEchoMode(QLineEdit.Password)
+
+        self.dns_input = QLineEdit(settings.get("dns_server", DEFAULT_DNS_SERVER))
 
         self.socks_host_input = QLineEdit(settings.get("socks_host", DEFAULT_SOCKS_HOST))
 
@@ -211,7 +258,9 @@ class SettingsDialog(QDialog):
         self.socks_port_input.setRange(1, 65535)
         self.socks_port_input.setValue(int(settings.get("socks_port", DEFAULT_SOCKS_PORT)))
 
-        self.network_service_input = QLineEdit(settings.get("network_service", DEFAULT_NETWORK_SERVICE))
+        self.network_service_input = QLineEdit(
+            settings.get("network_service", DEFAULT_NETWORK_SERVICE)
+        )
 
         self.auto_connect_checkbox = QCheckBox("Auto connect on app start")
         self.auto_connect_checkbox.setChecked(bool(settings.get("auto_connect", False)))
@@ -220,8 +269,17 @@ class SettingsDialog(QDialog):
         self.auto_refresh_checkbox.setChecked(bool(settings.get("auto_refresh", True)))
 
         form = QFormLayout()
+
+        form.addRow("", self.auto_fetch_config_checkbox)
+
         form.addRow("Config URL:", self.config_url_input)
         form.addRow("Config token:", self.config_token_input)
+
+        form.addRow("Provider:", self.provider_input)
+        form.addRow("Room ID:", self.room_id_input)
+        form.addRow("Encryption key:", self.encryption_key_input)
+        form.addRow("DNS:", self.dns_input)
+
         form.addRow("SOCKS host:", self.socks_host_input)
         form.addRow("SOCKS port:", self.socks_port_input)
 
@@ -231,16 +289,12 @@ class SettingsDialog(QDialog):
         form.addRow("", self.auto_connect_checkbox)
         form.addRow("", self.auto_refresh_checkbox)
 
-        save_button = QPushButton("Save")
-        cancel_button = QPushButton("Cancel")
-
-        save_button.clicked.connect(self.accept)
-        cancel_button.clicked.connect(self.reject)
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.accept)
 
         buttons = QHBoxLayout()
         buttons.addStretch()
-        buttons.addWidget(cancel_button)
-        buttons.addWidget(save_button)
+        buttons.addWidget(close_button)
 
         layout = QVBoxLayout()
         layout.addLayout(form)
@@ -248,16 +302,75 @@ class SettingsDialog(QDialog):
 
         self.setLayout(layout)
 
+        self.auto_fetch_config_checkbox.stateChanged.connect(self.update_manual_fields_state)
+
+        self.config_url_input.textChanged.connect(self.auto_save_to_parent)
+        self.config_token_input.textChanged.connect(self.auto_save_to_parent)
+        self.provider_input.textChanged.connect(self.auto_save_to_parent)
+        self.room_id_input.textChanged.connect(self.auto_save_to_parent)
+        self.encryption_key_input.textChanged.connect(self.auto_save_to_parent)
+        self.dns_input.textChanged.connect(self.auto_save_to_parent)
+        self.socks_host_input.textChanged.connect(self.auto_save_to_parent)
+        self.socks_port_input.valueChanged.connect(self.auto_save_to_parent)
+        self.network_service_input.textChanged.connect(self.auto_save_to_parent)
+        self.auto_connect_checkbox.stateChanged.connect(self.auto_save_to_parent)
+        self.auto_refresh_checkbox.stateChanged.connect(self.auto_save_to_parent)
+        self.auto_fetch_config_checkbox.stateChanged.connect(self.auto_save_to_parent)
+
+        self.update_manual_fields_state()
+
+    def auto_save_to_parent(self):
+        parent = self.parent()
+
+        if parent is None:
+            return
+
+        if not hasattr(parent, "settings"):
+            return
+
+        if not hasattr(parent, "save_settings"):
+            return
+
+        parent.settings = self.values()
+        parent.save_settings()
+
+        if hasattr(parent, "update_state"):
+            parent.update_state()
+
+    def update_manual_fields_state(self):
+        auto_fetch = self.auto_fetch_config_checkbox.isChecked()
+
+        self.config_url_input.setEnabled(auto_fetch)
+        self.config_token_input.setEnabled(auto_fetch)
+
+        self.provider_input.setEnabled(not auto_fetch)
+        self.room_id_input.setEnabled(not auto_fetch)
+        self.encryption_key_input.setEnabled(not auto_fetch)
+        self.dns_input.setEnabled(True)
+
     def values(self) -> dict:
         return {
+            "auto_fetch_config": self.auto_fetch_config_checkbox.isChecked(),
             "config_url": self.config_url_input.text().strip() or DEFAULT_CONFIG_URL,
             "config_token": self.config_token_input.text().strip() or DEFAULT_CONFIG_TOKEN,
+            "provider": self.provider_input.text().strip() or DEFAULT_PROVIDER,
+            "room_id": self.room_id_input.text().strip(),
+            "encryption_key": self.encryption_key_input.text().strip(),
+            "dns_server": self.dns_input.text().strip() or DEFAULT_DNS_SERVER,
             "socks_host": self.socks_host_input.text().strip() or DEFAULT_SOCKS_HOST,
             "socks_port": int(self.socks_port_input.value()),
             "network_service": self.network_service_input.text().strip() or DEFAULT_NETWORK_SERVICE,
             "auto_connect": self.auto_connect_checkbox.isChecked(),
             "auto_refresh": self.auto_refresh_checkbox.isChecked(),
         }
+
+    def accept(self):
+        self.auto_save_to_parent()
+        super().accept()
+
+    def closeEvent(self, event):
+        self.auto_save_to_parent()
+        event.accept()
 
 
 class MainWindow(QMainWindow):
@@ -350,8 +463,13 @@ class MainWindow(QMainWindow):
         path = get_settings_path()
 
         defaults = {
+            "auto_fetch_config": DEFAULT_AUTO_FETCH_CONFIG,
             "config_url": DEFAULT_CONFIG_URL,
             "config_token": DEFAULT_CONFIG_TOKEN,
+            "provider": DEFAULT_PROVIDER,
+            "room_id": DEFAULT_ROOM_ID,
+            "encryption_key": DEFAULT_ENCRYPTION_KEY,
+            "dns_server": DEFAULT_DNS_SERVER,
             "socks_host": DEFAULT_SOCKS_HOST,
             "socks_port": DEFAULT_SOCKS_PORT,
             "network_service": DEFAULT_NETWORK_SERVICE,
@@ -364,14 +482,20 @@ class MainWindow(QMainWindow):
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-
-            if not data.get("config_url"):
-                data["config_url"] = DEFAULT_CONFIG_URL
-
-            if not data.get("config_token"):
-                data["config_token"] = DEFAULT_CONFIG_TOKEN
-
             defaults.update(data)
+
+            if not defaults.get("config_url"):
+                defaults["config_url"] = DEFAULT_CONFIG_URL
+
+            if not defaults.get("config_token"):
+                defaults["config_token"] = DEFAULT_CONFIG_TOKEN
+
+            if not defaults.get("provider"):
+                defaults["provider"] = DEFAULT_PROVIDER
+
+            if not defaults.get("dns_server"):
+                defaults["dns_server"] = DEFAULT_DNS_SERVER
+
             return defaults
 
         except Exception:
@@ -420,7 +544,11 @@ class MainWindow(QMainWindow):
         else:
             self.set_status("Выключено")
 
-        self.details_label.setText(f"SOCKS5: {self.socks_host()}:{self.socks_port()}")
+        mode = "auto" if self.settings.get("auto_fetch_config", False) else "manual"
+        provider = self.settings.get("provider", DEFAULT_PROVIDER)
+        self.details_label.setText(
+            f"SOCKS5: {self.socks_host()}:{self.socks_port()} | {mode} | {provider}"
+        )
 
         self.connect_button.setEnabled(not running and not self.is_reconnecting)
         self.disconnect_button.setEnabled(running or self.is_reconnecting)
@@ -435,17 +563,33 @@ class MainWindow(QMainWindow):
 
     def open_settings(self):
         dialog = SettingsDialog(self, self.settings, self.platform_name)
+        dialog.exec()
 
-        if dialog.exec() == QDialog.Accepted:
-            self.settings = dialog.values()
+        self.settings = dialog.values()
+        self.save_settings()
+        self.update_state()
+        self.append_log("Настройки сохранены.")
+
+    def get_connection_config(self) -> dict:
+        if self.settings.get("auto_fetch_config", False):
+            cfg = fetch_connection_http(
+                self.settings.get("config_url", DEFAULT_CONFIG_URL),
+                self.settings.get("config_token", DEFAULT_CONFIG_TOKEN),
+            )
+
+            self.settings["provider"] = cfg["provider"]
+            self.settings["room_id"] = cfg["room_id"]
+            self.settings["encryption_key"] = cfg["encryption_key"]
+            self.settings["dns_server"] = cfg.get("dns_server", DEFAULT_DNS_SERVER)
             self.save_settings()
-            self.update_state()
-            self.append_log("Настройки сохранены.")
 
-    def fetch_config(self) -> dict:
-        return fetch_connection_http(
-            self.settings.get("config_url", DEFAULT_CONFIG_URL),
-            self.settings.get("config_token", DEFAULT_CONFIG_TOKEN),
+            return cfg
+
+        return validate_manual_config(
+            self.settings.get("provider", DEFAULT_PROVIDER),
+            self.settings.get("room_id", ""),
+            self.settings.get("encryption_key", ""),
+            self.settings.get("dns_server", DEFAULT_DNS_SERVER),
         )
 
     def cleanup_old_client(self):
@@ -571,14 +715,16 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
 
             self.append_log("=== Включение ===")
+            self.save_settings()
 
             self.cleanup_old_client()
 
-            cfg = self.fetch_config()
+            cfg = self.get_connection_config()
             self.current_config = cfg
 
             self.append_log(
-                "Конфиг получен:\n"
+                "Конфиг выбран:\n"
+                f"Mode: {'auto fetch' if self.settings.get('auto_fetch_config', False) else 'manual'}\n"
                 f"Provider: {cfg['provider']}\n"
                 f"Room ID: {cfg['room_id']}\n"
                 f"DNS: {cfg.get('dns_server', DEFAULT_DNS_SERVER)}"
@@ -588,7 +734,9 @@ class MainWindow(QMainWindow):
 
             self.client_log_path.parent.mkdir(parents=True, exist_ok=True)
             self.client_log_file = open(self.client_log_path, "a", encoding="utf-8", buffering=1)
-            self.client_log_position = self.client_log_path.stat().st_size if self.client_log_path.exists() else 0
+            self.client_log_position = (
+                self.client_log_path.stat().st_size if self.client_log_path.exists() else 0
+            )
 
             self.client_process = self.platform.start_process(args, self.client_log_file)
 
@@ -603,7 +751,7 @@ class MainWindow(QMainWindow):
             if not self.wait_proxy_ready(timeout_seconds=25):
                 raise RuntimeError(
                     "Туннель не стал готовым за 25 секунд. "
-                    "Системный proxy не включён. Проверь логи сервера."
+                    "Системный proxy не включён. Проверь Room ID, key и логи сервера."
                 )
 
             self.platform.enable_system_proxy(
@@ -612,8 +760,10 @@ class MainWindow(QMainWindow):
                 self.network_service(),
             )
 
-            if self.settings.get("auto_refresh", True):
+            if self.settings.get("auto_refresh", True) and self.settings.get("auto_fetch_config", False):
                 self.config_timer.start()
+            else:
+                self.config_timer.stop()
 
             self.append_log("Подключено.")
             self.set_status("Включено")
@@ -719,17 +869,29 @@ class MainWindow(QMainWindow):
         if self.is_reconnecting:
             return
 
+        if not self.settings.get("auto_fetch_config", False):
+            return
+
         try:
             if not self.is_running():
                 return
 
-            new_cfg = self.fetch_config()
+            new_cfg = fetch_connection_http(
+                self.settings.get("config_url", DEFAULT_CONFIG_URL),
+                self.settings.get("config_token", DEFAULT_CONFIG_TOKEN),
+            )
 
             if self.current_config == new_cfg:
                 self.append_log("Автопроверка: комната не изменилась.")
                 return
 
             self.append_log("Автопроверка: комната изменилась, переподключаюсь.")
+
+            self.settings["provider"] = new_cfg["provider"]
+            self.settings["room_id"] = new_cfg["room_id"]
+            self.settings["encryption_key"] = new_cfg["encryption_key"]
+            self.settings["dns_server"] = new_cfg.get("dns_server", DEFAULT_DNS_SERVER)
+            self.save_settings()
 
             self.is_reconnecting = True
             self.update_state()
