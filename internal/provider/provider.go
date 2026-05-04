@@ -35,9 +35,12 @@ type Provider interface {
 	CanSend() bool
 	GetSendQueue() chan []byte
 	GetBufferedAmount() uint64
+}
 
-	// AddVideoTrack adds a video track to the connection.
-	AddVideoTrack(track *webrtc.TrackLocalStaticRTP) (*webrtc.RTPSender, error)
+// VideoTrackCapable is implemented by providers that can exchange video tracks.
+type VideoTrackCapable interface {
+	AddVideoTrack(track webrtc.TrackLocal) error
+	SetVideoTrackHandler(cb func(*webrtc.TrackRemote, *webrtc.RTPReceiver))
 }
 
 // Config holds common configuration for all providers.

@@ -148,12 +148,9 @@ func buildBinary(name, pkg, os_, arch string) error {
 		flags += " -checklinkname=0"
 	}
 
-	return sh.RunWithV(env, goexe, "build",
-		"-trimpath",
-		"-ldflags", flags,
-		"-o", out,
-		pkg,
-	)
+	args := []string{"build", "-trimpath", "-ldflags", flags, "-o", out, pkg}
+
+	return sh.RunWithV(env, goexe, args...)
 }
 
 func buildUIBinary(os_, arch string) error {
@@ -189,7 +186,6 @@ func buildUIBinary(os_, arch string) error {
 
 	return cmd.Run()
 }
-
 
 func ensureBuildDir() error {
 	return os.MkdirAll(buildDir, 0o755)

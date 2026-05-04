@@ -9,7 +9,6 @@ require (
 	github.com/magefile/mage v1.17.1
 	github.com/pion/webrtc/v4 v4.2.11
 	golang.org/x/crypto v0.50.0
-	golang.org/x/mobile v0.0.0-20260410095206-2cfb76559b7b
 )
 
 require (
@@ -74,7 +73,6 @@ require (
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
