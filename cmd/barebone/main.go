@@ -149,7 +149,7 @@ func parseFlags() config {
 
 	flag.StringVar(&cfg.bootstrapClientsFile, "bootstrap-clients-file", "", "Bootstrap server clients JSON file")
 	flag.StringVar(&cfg.bootstrapPersonalDataDir, "bootstrap-personal-data", "", "Bootstrap server personal clients data directory")
-	flag.StringVar(&cfg.bootstrapRoomPrefix, "bootstrap-room-prefix", bootstrap.DefaultRoomPrefix, "Bootstrap server personal room prefix")
+	flag.StringVar(&cfg.bootstrapRoomPrefix, "bootstrap-room-prefix", "", "Bootstrap server personal room prefix")
 
 	flag.BoolVar(&cfg.debug, "debug", false, "Enable verbose logging")
 

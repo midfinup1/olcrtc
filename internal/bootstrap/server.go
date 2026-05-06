@@ -21,10 +21,6 @@ import (
 	"github.com/openlibrecommunity/olcrtc/internal/names"
 )
 
-const (
-	DefaultRoomPrefix = "bb20"
-)
-
 type ServerConfig struct {
 	LinkName       string
 	TransportName  string
