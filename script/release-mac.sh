@@ -2,12 +2,12 @@
 
 set -euo pipefail
 
-APP_NAME="bb20 vpn"
+APP_NAME="BareBone VPN"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$ROOT_DIR"
 
-echo "=== olcRTC macOS release build ==="
+echo "=== BareBoneVPN macOS release build ==="
 echo "Root: $ROOT_DIR"
 echo ""
 
@@ -24,7 +24,7 @@ fi
 echo "[*] Cleaning old build..."
 rm -rf build
 rm -rf dist
-rm -f app/olcrtc
+rm -f app/BareBoneVPN
 
 find . -name ".DS_Store" -delete
 
@@ -39,15 +39,15 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r app/requirements.txt pyinstaller
 
-echo "[*] Building olcRTC binary..."
-go build -o app/olcrtc cmd/olcrtc/main.go
+echo "[*] Building BareBoneVPN binary..."
+go build -o app/BareBoneVPN cmd/barebone/main.go
 
-if [ ! -f "app/olcrtc" ]; then
-    echo "[X] app/olcrtc was not created"
+if [ ! -f "app/BareBoneVPN" ]; then
+    echo "[X] app/BareBoneVPN was not created"
     exit 1
 fi
 
-chmod +x app/olcrtc
+chmod +x app/BareBoneVPN
 
 echo "[*] Building macOS app..."
 
@@ -55,7 +55,7 @@ pyinstaller \
     --clean \
     --windowed \
     --name "$APP_NAME" \
-    --add-binary "app/olcrtc:." \
+    --add-binary "app/BareBoneVPN:." \
     --paths app \
     app/app_standalone.py
 

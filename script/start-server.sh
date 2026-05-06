@@ -58,10 +58,10 @@ podman run --rm \
     -v "$WORK_DIR:/app" \
     -w /app \
     "$IMAGE_NAME" \
-    sh -c "go build -o olcrtc cmd/olcrtc/main.go" >> "$LOG_FILE" 2>&1
+    sh -c "go build -o olcrtc cmd/barebone/main.go" >> "$LOG_FILE" 2>&1
 
 if [ ! -f "$WORK_DIR/olcrtc" ]; then
-    echo "[X] Build failed: $WORK_DIR/olcrtc not found" | tee -a "$LOG_FILE"
+    echo "[X] Build failed: $WORK_DIR/barebone not found" | tee -a "$LOG_FILE"
     exit 1
 fi
 

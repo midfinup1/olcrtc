@@ -1,12 +1,12 @@
+import subprocess
+
 from common import PlatformAdapter, run_app, run_command
 
 
 class MacOSPlatform(PlatformAdapter):
-    binary_name = "olcrtc"
+    binary_name = "BareBoneVPN"
 
     def start_process(self, args: list[str], log_file):
-        import subprocess
-
         return subprocess.Popen(
             args,
             stdout=log_file,
@@ -17,17 +17,28 @@ class MacOSPlatform(PlatformAdapter):
         )
 
     def kill_existing_client(self):
-        run_command(["pkill", "-f", "olcrtc.*-mode.*cnc"], timeout=5)
-        run_command(["pkill", "-f", "olcrtc"], timeout=5)
+        run_command(["pkill", "-f", "BareBoneVPN.*-mode.*cnc"], timeout=5)
+        run_command(["pkill", "-f", "BareBoneVPN"], timeout=5)
 
     def enable_system_proxy(self, socks_host: str, socks_port: int, network_service: str):
         code1, out1 = run_command(
-            ["networksetup", "-setsocksfirewallproxy", network_service, socks_host, str(socks_port)],
+            [
+                "networksetup",
+                "-setsocksfirewallproxy",
+                network_service,
+                socks_host,
+                str(socks_port),
+            ],
             timeout=20,
         )
 
         code2, out2 = run_command(
-            ["networksetup", "-setsocksfirewallproxystate", network_service, "on"],
+            [
+                "networksetup",
+                "-setsocksfirewallproxystate",
+                network_service,
+                "on",
+            ],
             timeout=20,
         )
 
@@ -36,7 +47,12 @@ class MacOSPlatform(PlatformAdapter):
 
     def disable_system_proxy(self, network_service: str):
         code, output = run_command(
-            ["networksetup", "-setsocksfirewallproxystate", network_service, "off"],
+            [
+                "networksetup",
+                "-setsocksfirewallproxystate",
+                network_service,
+                "off",
+            ],
             timeout=20,
         )
 
@@ -45,7 +61,11 @@ class MacOSPlatform(PlatformAdapter):
 
     def is_port_listening(self, port: int) -> bool:
         code, output = run_command(
-            ["lsof", f"-iTCP:{port}", "-sTCP:LISTEN"],
+            [
+                "lsof",
+                f"-iTCP:{port}",
+                "-sTCP:LISTEN",
+            ],
             timeout=3,
         )
 
