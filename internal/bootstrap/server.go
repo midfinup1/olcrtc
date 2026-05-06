@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -153,10 +154,6 @@ func validateServerConfig(cfg ServerConfig) error {
 		return errors.New("bootstrap server binary path is required")
 	}
 
-	if strings.TrimSpace(cfg.RoomPrefix) == "" {
-		return errors.New("bootstrap server room prefix is required")
-	}
-
 	if strings.TrimSpace(cfg.PersonalLinkName) == "" {
 		return errors.New("bootstrap server personal link is required")
 	}
@@ -238,11 +235,13 @@ func (s *Server) saveStoreLocked() error {
 func (s *Server) ensureKnownClientsRunning(ctx context.Context) error {
 	s.mu.Lock()
 	records := make([]ClientRecord, 0, len(s.store.Clients))
+
 	for _, record := range s.store.Clients {
 		if record.Enabled {
 			records = append(records, record)
 		}
 	}
+
 	s.mu.Unlock()
 
 	for _, record := range records {
@@ -259,6 +258,7 @@ func (s *Server) runBootstrapLoop(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
+
 		default:
 		}
 
@@ -278,7 +278,6 @@ func (s *Server) runBootstrapLoop(ctx context.Context) error {
 
 func (s *Server) runOneBootstrapLink(ctx context.Context) error {
 	linkDone := make(chan string, 1)
-	errorCh := make(chan error, 1)
 
 	var ln link.Link
 
@@ -287,12 +286,11 @@ func (s *Server) runOneBootstrapLink(ctx context.Context) error {
 			return
 		}
 
-		if err := s.handleBootstrapData(ctx, ln, data); err != nil {
-			select {
-			case errorCh <- err:
-			default:
+		go func() {
+			if err := s.handleBootstrapData(ctx, ln, data); err != nil {
+				logger.Warnf("bootstrap request handling error: %v", err)
 			}
-		}
+		}()
 	}
 
 	created, err := link.New(ctx, s.cfg.LinkName, link.Config{
@@ -335,10 +333,6 @@ func (s *Server) runOneBootstrapLink(ctx context.Context) error {
 	case reason := <-linkDone:
 		_ = ln.Close()
 		return fmt.Errorf("bootstrap room ended: %s", reason)
-
-	case err := <-errorCh:
-		logger.Warnf("bootstrap request handling error: %v", err)
-		return nil
 	}
 }
 
@@ -399,18 +393,20 @@ func (s *Server) handleBootstrapData(ctx context.Context, ln link.Link, data []b
 
 func (s *Server) getOrCreateClient(ctx context.Context, clientID string) (ClientRecord, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if record, ok := s.store.Clients[clientID]; ok {
 		if !record.Enabled {
 			record.Enabled = true
 			record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 			s.store.Clients[clientID] = record
+
 			if err := s.saveStoreLocked(); err != nil {
+				s.mu.Unlock()
 				return ClientRecord{}, err
 			}
 		}
 
+		s.mu.Unlock()
 		return record, nil
 	}
 
@@ -418,12 +414,13 @@ func (s *Server) getOrCreateClient(ctx context.Context, clientID string) (Client
 
 	keyHex, err := generateHexKey32()
 	if err != nil {
+		s.mu.Unlock()
 		return ClientRecord{}, err
 	}
 
 	record := ClientRecord{
 		ClientID:      clientID,
-		RoomID:        s.generateRoomID(clientID),
+		RoomID:        "any",
 		EncryptionKey: keyHex,
 		Provider:      s.cfg.PersonalCarrierName,
 		Transport:     s.cfg.PersonalTransportName,
@@ -433,15 +430,27 @@ func (s *Server) getOrCreateClient(ctx context.Context, clientID string) (Client
 		UpdatedAt:      now,
 	}
 
-	s.store.Clients[clientID] = record
+	s.mu.Unlock()
 
-	if err := s.saveStoreLocked(); err != nil {
+	realRoomID, err := s.startTemporaryAnyRoomAndGetID(ctx, record)
+	if err != nil {
 		return ClientRecord{}, err
 	}
 
-	logger.Infof("created client config client_id=%s room_id=%s", record.ClientID, record.RoomID)
+	record.RoomID = realRoomID
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 
-	_ = ctx
+	s.mu.Lock()
+	s.store.Clients[clientID] = record
+
+	if err := s.saveStoreLocked(); err != nil {
+		s.mu.Unlock()
+		return ClientRecord{}, err
+	}
+
+	s.mu.Unlock()
+
+	logger.Infof("created client config client_id=%s room_id=%s", record.ClientID, record.RoomID)
 
 	return record, nil
 }
@@ -450,17 +459,11 @@ func (s *Server) rotateClient(ctx context.Context, clientID string) (ClientRecor
 	s.stopPersonalProcess(clientID)
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	record, ok := s.store.Clients[clientID]
 	if !ok {
-		keyHex, err := generateHexKey32()
-		if err != nil {
-			return ClientRecord{}, err
-		}
-
 		record = ClientRecord{
 			ClientID:  clientID,
 			Provider:  s.cfg.PersonalCarrierName,
@@ -469,35 +472,115 @@ func (s *Server) rotateClient(ctx context.Context, clientID string) (ClientRecor
 			Enabled:   true,
 			CreatedAt: now,
 		}
-
-		record.EncryptionKey = keyHex
-	} else {
-		keyHex, err := generateHexKey32()
-		if err != nil {
-			return ClientRecord{}, err
-		}
-
-		record.EncryptionKey = keyHex
 	}
 
-	record.RoomID = s.generateRoomID(clientID)
+	keyHex, err := generateHexKey32()
+	if err != nil {
+		s.mu.Unlock()
+		return ClientRecord{}, err
+	}
+
+	record.EncryptionKey = keyHex
+	record.RoomID = "any"
 	record.Provider = s.cfg.PersonalCarrierName
 	record.Transport = s.cfg.PersonalTransportName
 	record.DNSServer = s.cfg.DNSServer
 	record.Enabled = true
 	record.UpdatedAt = now
 
-	s.store.Clients[clientID] = record
+	s.mu.Unlock()
 
-	if err := s.saveStoreLocked(); err != nil {
+	realRoomID, err := s.startTemporaryAnyRoomAndGetID(ctx, record)
+	if err != nil {
 		return ClientRecord{}, err
 	}
 
+	record.RoomID = realRoomID
+	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+
+	s.mu.Lock()
+	s.store.Clients[clientID] = record
+
+	if err := s.saveStoreLocked(); err != nil {
+		s.mu.Unlock()
+		return ClientRecord{}, err
+	}
+
+	s.mu.Unlock()
+
 	logger.Infof("rotated client config client_id=%s room_id=%s", record.ClientID, record.RoomID)
 
-	_ = ctx
-
 	return record, nil
+}
+
+func (s *Server) startTemporaryAnyRoomAndGetID(ctx context.Context, record ClientRecord) (string, error) {
+	clientDataDir := filepath.Join(s.cfg.PersonalDataDir, record.ClientID, "data-create")
+	clientLogDir := filepath.Join(s.cfg.PersonalDataDir, record.ClientID, "logs")
+
+	if err := os.MkdirAll(clientDataDir, 0o700); err != nil {
+		return "", fmt.Errorf("create temporary data dir failed: %w", err)
+	}
+
+	if err := os.MkdirAll(clientLogDir, 0o700); err != nil {
+		return "", fmt.Errorf("create temporary log dir failed: %w", err)
+	}
+
+	logPath := filepath.Join(clientLogDir, "create-room.log")
+
+	_ = os.Remove(logPath)
+
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return "", fmt.Errorf("open temporary room log failed: %w", err)
+	}
+
+	processCtx, cancel := context.WithCancel(ctx)
+
+	args := []string{
+		"-mode", "srv",
+		"-link", s.cfg.PersonalLinkName,
+		"-transport", record.Transport,
+		"-provider", record.Provider,
+		"-id", "any",
+		"-key", record.EncryptionKey,
+		"-data", clientDataDir,
+		"-dns", record.DNSServer,
+		"-debug",
+	}
+
+	cmd := exec.CommandContext(processCtx, s.cfg.BinaryPath, args...)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	if err := cmd.Start(); err != nil {
+		cancel()
+		_ = logFile.Close()
+		return "", fmt.Errorf("start temporary WB room creator failed client_id=%s: %w", record.ClientID, err)
+	}
+
+	roomID, waitErr := waitRoomIDFromLog(ctx, logPath, 25*time.Second)
+
+	cancel()
+
+	if cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+
+	_ = cmd.Wait()
+	_ = logFile.Close()
+
+	if waitErr != nil {
+		raw, _ := os.ReadFile(logPath)
+		return "", fmt.Errorf("%w\ncreate-room.log:\n%s", waitErr, string(raw))
+	}
+
+	if strings.TrimSpace(roomID) == "" {
+		return "", errors.New("created WB room id is empty")
+	}
+
+	logger.Infof("created WB room via any client_id=%s room_id=%s", record.ClientID, roomID)
+
+	return roomID, nil
 }
 
 func (s *Server) ensurePersonalProcess(ctx context.Context, record ClientRecord) error {
@@ -554,6 +637,7 @@ func (s *Server) startPersonalProcess(ctx context.Context, record ClientRecord) 
 		"-key", record.EncryptionKey,
 		"-data", clientDataDir,
 		"-dns", record.DNSServer,
+		"-debug",
 	}
 
 	cmd := exec.CommandContext(processCtx, s.cfg.BinaryPath, args...)
@@ -655,9 +739,11 @@ func (s *Server) stopPersonalProcess(clientID string) {
 func (s *Server) stopAllPersonalProcesses() {
 	s.mu.Lock()
 	clientIDs := make([]string, 0, len(s.processes))
+
 	for clientID := range s.processes {
 		clientIDs = append(clientIDs, clientID)
 	}
+
 	s.mu.Unlock()
 
 	for _, clientID := range clientIDs {
@@ -712,13 +798,6 @@ func (s *Server) sendResponse(ctx context.Context, ln link.Link, response Respon
 	return nil
 }
 
-func (s *Server) generateRoomID(clientID string) string {
-	safeClientID := sanitizeClientID(clientID)
-	randomPart := randomHex(4)
-
-	return fmt.Sprintf("%s-%s-%s", s.cfg.RoomPrefix, safeClientID, randomPart)
-}
-
 func generateHexKey32() (string, error) {
 	buf := make([]byte, 32)
 
@@ -769,4 +848,63 @@ func sanitizeClientID(clientID string) string {
 	}
 
 	return value
+}
+
+var wbRoomIDRegexp = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
+
+func extractRoomIDFromText(text string) string {
+	matches := wbRoomIDRegexp.FindAllString(text, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+
+	return strings.ToLower(matches[len(matches)-1])
+}
+
+func waitRoomIDFromLog(ctx context.Context, logPath string, timeout time.Duration) (string, error) {
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	var position int64
+
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+
+		case <-deadline.C:
+			return "", fmt.Errorf("timeout waiting for WB room id in log: %s", logPath)
+
+		case <-ticker.C:
+			file, err := os.Open(logPath)
+			if err != nil {
+				continue
+			}
+
+			if position > 0 {
+				_, _ = file.Seek(position, 0)
+			}
+
+			scanner := bufio.NewScanner(file)
+			scanner.Buffer(make([]byte, 1024), 1024*1024)
+
+			for scanner.Scan() {
+				line := scanner.Text()
+
+				if roomID := extractRoomIDFromText(line); roomID != "" {
+					_ = file.Close()
+					return roomID, nil
+				}
+			}
+
+			if current, err := file.Seek(0, 1); err == nil {
+				position = current
+			}
+
+			_ = file.Close()
+		}
+	}
 }

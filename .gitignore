@@ -248,4 +248,4 @@ GEMINI.md
 code/package-lock.json
 olcrtc
 .DS_Store
-bb20 vpn.spec
+*.spec
