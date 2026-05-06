@@ -8,7 +8,7 @@ import urllib.request
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QPalette
+from PySide6.QtGui import QColor, QPainter, QPalette, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -49,33 +49,32 @@ DEFAULT_LINK_TYPE = "direct"
 DEFAULT_TRANSPORT = "datachannel"
 DEFAULT_NETWORK_SERVICE = "Wi-Fi"
 
-# Bootstrap-комната.
-# Эти значения потом должны совпадать с серверной bootstrap-комнатой.
 DEFAULT_BOOTSTRAP_ENABLED = True
 DEFAULT_BOOTSTRAP_PROVIDER = "wbstream"
-DEFAULT_BOOTSTRAP_ROOM_ID = "bb20-bootstrap"
-DEFAULT_BOOTSTRAP_KEY = "CHANGE_ME_BOOTSTRAP_KEY_64_HEX"
-DEFAULT_BOOTSTRAP_TOKEN = "CHANGE_ME_BOOTSTRAP_TOKEN"
+DEFAULT_BOOTSTRAP_ROOM_ID = "019dfa7c-5941-74f1-b6d6-ba76c302538d"
+DEFAULT_BOOTSTRAP_KEY = "276b40f502d113889da50ed0c0810f959f1090bf56823b931b85a9f5e738b4f6"
+DEFAULT_BOOTSTRAP_TOKEN = "87e0229fc6e7f65e65b7582a2b29e32906ad5adb45eed9000f539b9f6ad3c176"
+DEFAULT_BOOTSTRAP_DNS_SERVER = "1.1.1.1:53"
 DEFAULT_BOOTSTRAP_TIMEOUT_SECONDS = 45
 
-# Чтобы первый этап можно было собрать без готовой серверной части:
-# клиентский код ожидает, что Go-бинарник поддерживает режим bootstrap-cnc.
+DEFAULT_BOOTSTRAP_ACTION_REGISTER = "register"
+DEFAULT_BOOTSTRAP_ACTION_ROTATE = "rotate"
 BOOTSTRAP_MODE_NAME = "bootstrap-cnc"
 
 # ============================================================
 # Палитра
 # ============================================================
 
-C_BG      = "#0d0f12"
+C_BG = "#0d0f12"
 C_SURFACE = "#14181f"
-C_CARD    = "#1a1f28"
-C_BORDER  = "#252b36"
-C_ACCENT  = "#00e5a0"
+C_CARD = "#1a1f28"
+C_BORDER = "#252b36"
+C_ACCENT = "#00e5a0"
 C_ACCENT2 = "#0099ff"
-C_RED     = "#ff4d6a"
-C_TEXT    = "#e8edf5"
-C_MUTED   = "#5a6478"
-C_LABEL   = "#8a95a8"
+C_RED = "#ff4d6a"
+C_TEXT = "#e8edf5"
+C_MUTED = "#5a6478"
+C_LABEL = "#8a95a8"
 
 STYLESHEET = f"""
 QWidget {{
@@ -84,7 +83,10 @@ QWidget {{
     font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
     font-size: 12px;
 }}
-QMainWindow, QDialog {{ background: {C_BG}; }}
+
+QMainWindow, QDialog {{
+    background: {C_BG};
+}}
 
 QPushButton {{
     background: {C_CARD};
@@ -95,12 +97,17 @@ QPushButton {{
     font-size: 12px;
     letter-spacing: 0.5px;
 }}
+
 QPushButton:hover {{
     background: {C_SURFACE};
     border-color: {C_ACCENT2};
     color: {C_ACCENT2};
 }}
-QPushButton:pressed {{ background: {C_BG}; }}
+
+QPushButton:pressed {{
+    background: {C_BG};
+}}
+
 QPushButton:disabled {{
     color: {C_MUTED};
     border-color: {C_BORDER};
@@ -117,10 +124,12 @@ QPushButton#btn_connect {{
     border-radius: 8px;
     letter-spacing: 1px;
 }}
+
 QPushButton#btn_connect:hover {{
     background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
         stop:0 #00cc88, stop:1 #33ffb8);
 }}
+
 QPushButton#btn_connect:disabled {{
     background: {C_CARD};
     color: {C_MUTED};
@@ -134,7 +143,11 @@ QPushButton#btn_disconnect {{
     font-weight: 600;
     border-radius: 8px;
 }}
-QPushButton#btn_disconnect:hover {{ background: rgba(255,77,106,0.12); }}
+
+QPushButton#btn_disconnect:hover {{
+    background: rgba(255,77,106,0.12);
+}}
+
 QPushButton#btn_disconnect:disabled {{
     color: {C_MUTED};
     border-color: {C_BORDER};
@@ -148,9 +161,32 @@ QPushButton#btn_logs {{
     padding: 8px 14px;
     font-size: 11px;
 }}
+
 QPushButton#btn_logs:hover {{
     border-color: {C_ACCENT2};
     color: {C_ACCENT2};
+}}
+
+QPushButton#btn_icon {{
+    background: {C_CARD};
+    color: {C_LABEL};
+    border: 1px solid {C_BORDER};
+    border-radius: 6px;
+    padding: 0;
+    font-size: 16px;
+    font-weight: 700;
+}}
+
+QPushButton#btn_icon:hover {{
+    background: {C_SURFACE};
+    border-color: {C_ACCENT2};
+    color: {C_ACCENT2};
+}}
+
+QPushButton#btn_icon:disabled {{
+    background: {C_BG};
+    color: {C_MUTED};
+    border-color: {C_BORDER};
 }}
 
 QLineEdit, QSpinBox {{
@@ -161,25 +197,38 @@ QLineEdit, QSpinBox {{
     color: {C_TEXT};
     selection-background-color: {C_ACCENT2};
 }}
-QLineEdit:focus, QSpinBox:focus {{ border-color: {C_ACCENT2}; }}
+
+QLineEdit:focus, QSpinBox:focus {{
+    border-color: {C_ACCENT2};
+}}
+
 QSpinBox::up-button, QSpinBox::down-button {{
     background: {C_CARD};
     border: none;
     width: 16px;
 }}
 
-QCheckBox {{ color: {C_LABEL}; spacing: 8px; }}
+QCheckBox {{
+    color: {C_LABEL};
+    spacing: 8px;
+}}
+
 QCheckBox::indicator {{
-    width: 16px; height: 16px;
+    width: 16px;
+    height: 16px;
     border: 1px solid {C_BORDER};
     border-radius: 3px;
     background: {C_SURFACE};
 }}
+
 QCheckBox::indicator:checked {{
     background: {C_ACCENT};
     border-color: {C_ACCENT};
 }}
-QCheckBox:hover {{ color: {C_TEXT}; }}
+
+QCheckBox:hover {{
+    color: {C_TEXT};
+}}
 
 QPlainTextEdit {{
     background: {C_SURFACE};
@@ -192,13 +241,24 @@ QPlainTextEdit {{
 }}
 
 QScrollBar:vertical {{
-    background: {C_BG}; width: 6px; border-radius: 3px;
+    background: {C_BG};
+    width: 6px;
+    border-radius: 3px;
 }}
+
 QScrollBar::handle:vertical {{
-    background: {C_BORDER}; border-radius: 3px; min-height: 20px;
+    background: {C_BORDER};
+    border-radius: 3px;
+    min-height: 20px;
 }}
-QScrollBar::handle:vertical:hover {{ background: {C_MUTED}; }}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+
+QScrollBar::handle:vertical:hover {{
+    background: {C_MUTED};
+}}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+    height: 0;
+}}
 """
 
 # ============================================================
@@ -208,9 +268,15 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 def to_text(value) -> str:
     if value is None:
         return ""
+
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
+
     return str(value)
+
+
+def generate_client_id() -> str:
+    return "c-" + secrets.token_hex(8)
 
 
 def get_user_dir() -> Path:
@@ -231,18 +297,13 @@ def get_log_path() -> Path:
     return path / "client.log"
 
 
-def get_bootstrap_log_path() -> Path:
-    path = get_user_dir() / "logs"
-    path.mkdir(parents=True, exist_ok=True)
-    return path / "bootstrap.log"
-
-
 def get_settings_path() -> Path:
     return get_user_dir() / "settings.json"
 
 
 def run_command(args, timeout=None, windows_no_window=False) -> tuple[int, str]:
     creationflags = 0
+
     if sys.platform == "win32" and windows_no_window:
         creationflags = subprocess.CREATE_NO_WINDOW
 
@@ -256,39 +317,12 @@ def run_command(args, timeout=None, windows_no_window=False) -> tuple[int, str]:
             creationflags=creationflags,
         )
         return process.returncode, to_text(process.stdout)
+
     except subprocess.TimeoutExpired as exc:
         return 124, to_text(exc.stdout) + "\n[timeout]\n"
+
     except Exception as exc:
         return 1, f"{type(exc).__name__}: {exc}\n"
-
-
-def generate_client_id() -> str:
-    return "c-" + secrets.token_hex(8)
-
-
-def normalize_config(data: dict) -> dict:
-    provider = str(data.get("provider", DEFAULT_PROVIDER)).strip()
-    room_id = str(data.get("room_id", "")).strip()
-    encryption_key = str(data.get("encryption_key", "")).strip()
-    dns_server = str(data.get("dns_server", DEFAULT_DNS_SERVER)).strip() or DEFAULT_DNS_SERVER
-    transport = str(data.get("transport", DEFAULT_TRANSPORT)).strip() or DEFAULT_TRANSPORT
-
-    if provider not in ["wbstream", "jazz", "telemost"]:
-        raise RuntimeError(f"Unsupported provider: {provider}")
-
-    if not room_id:
-        raise RuntimeError("Config error: room_id is empty")
-
-    if not encryption_key:
-        raise RuntimeError("Config error: encryption_key is empty")
-
-    return {
-        "provider": provider,
-        "room_id": room_id,
-        "encryption_key": encryption_key,
-        "dns_server": dns_server,
-        "transport": transport,
-    }
 
 
 def fetch_connection_http(url: str, token: str) -> dict:
@@ -303,17 +337,25 @@ def fetch_connection_http(url: str, token: str) -> dict:
 
     request = urllib.request.Request(
         url,
-        headers={"Authorization": f"Bearer {token}", "User-Agent": APP_NAME},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "User-Agent": APP_NAME,
+        },
     )
 
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             status_code = response.status
             body = response.read().decode("utf-8")
+
     except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"HTTP {exc.code}: {exc.read().decode('utf-8', errors='replace')}") from exc
+        raise RuntimeError(
+            f"HTTP {exc.code}: {exc.read().decode('utf-8', errors='replace')}"
+        ) from exc
+
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Connection error: {exc}") from exc
+
     except TimeoutError as exc:
         raise RuntimeError("Connection timeout while fetching config.") from exc
 
@@ -322,22 +364,95 @@ def fetch_connection_http(url: str, token: str) -> dict:
 
     try:
         data = json.loads(body)
+
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Invalid JSON from server:\n{body}") from exc
 
-    return normalize_config(data)
+    provider = data.get("provider", "")
+    room_id = data.get("room_id", "")
+    encryption_key = data.get("encryption_key", "")
+    dns_server = data.get("dns_server", DEFAULT_DNS_SERVER)
+
+    if not provider or not room_id or not encryption_key:
+        raise RuntimeError("connection.json incomplete: need provider, room_id, encryption_key")
+
+    return {
+        "provider": provider,
+        "room_id": room_id,
+        "encryption_key": encryption_key,
+        "dns_server": dns_server,
+        "transport": data.get("transport", DEFAULT_TRANSPORT),
+    }
 
 
-def validate_manual_config(provider: str, room_id: str, encryption_key: str, dns_server: str) -> dict:
-    return normalize_config(
-        {
-            "provider": provider,
-            "room_id": room_id,
-            "encryption_key": encryption_key,
-            "dns_server": dns_server,
-            "transport": DEFAULT_TRANSPORT,
+def validate_manual_config(
+    provider: str,
+    room_id: str,
+    encryption_key: str,
+    dns_server: str,
+) -> dict:
+    provider = provider.strip()
+    room_id = room_id.strip()
+    encryption_key = encryption_key.strip()
+    dns_server = dns_server.strip() or DEFAULT_DNS_SERVER
+
+    if not provider:
+        raise RuntimeError("Provider is empty. Open Settings.")
+
+    if provider not in ["wbstream", "jazz", "telemost"]:
+        raise RuntimeError("Provider must be wbstream, jazz, or telemost.")
+
+    if not room_id:
+        raise RuntimeError("Room ID is empty. Open Settings.")
+
+    if not encryption_key:
+        raise RuntimeError("Encryption key is empty. Open Settings.")
+
+    return {
+        "provider": provider,
+        "room_id": room_id,
+        "encryption_key": encryption_key,
+        "dns_server": dns_server,
+        "transport": DEFAULT_TRANSPORT,
+    }
+
+
+def extract_bootstrap_config(output: str) -> dict:
+    marker = "BB_CONFIG_JSON="
+
+    for line in output.splitlines():
+        line = line.strip()
+
+        if not line.startswith(marker):
+            continue
+
+        raw_json = line[len(marker):].strip()
+
+        try:
+            data = json.loads(raw_json)
+
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Invalid BB_CONFIG_JSON:\n{raw_json}") from exc
+
+        if data.get("type") != "CONFIG":
+            raise RuntimeError(f"Unexpected bootstrap response type: {data.get('type')}")
+
+        required = ["client_id", "provider", "room_id", "encryption_key"]
+        missing = [key for key in required if not str(data.get(key, "")).strip()]
+
+        if missing:
+            raise RuntimeError(f"Bootstrap config is incomplete. Missing: {', '.join(missing)}")
+
+        return {
+            "client_id": str(data.get("client_id", "")).strip(),
+            "provider": str(data.get("provider", DEFAULT_PROVIDER)).strip() or DEFAULT_PROVIDER,
+            "room_id": str(data.get("room_id", "")).strip(),
+            "encryption_key": str(data.get("encryption_key", "")).strip(),
+            "transport": str(data.get("transport", DEFAULT_TRANSPORT)).strip() or DEFAULT_TRANSPORT,
+            "dns_server": str(data.get("dns_server", DEFAULT_DNS_SERVER)).strip() or DEFAULT_DNS_SERVER,
         }
-    )
+
+    raise RuntimeError(f"BB_CONFIG_JSON not found in bootstrap output:\n{output}")
 
 
 # ============================================================
@@ -347,10 +462,13 @@ def validate_manual_config(provider: str, room_id: str, encryption_key: str, dns
 class StatusOrb(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+
         self.setFixedSize(14, 14)
+
         self._state = "off"
         self._pulse = 0.0
         self._direction = 1
+
         self._timer = QTimer(self)
         self._timer.setInterval(30)
         self._timer.timeout.connect(self._tick)
@@ -363,20 +481,23 @@ class StatusOrb(QWidget):
     def _tick(self):
         if self._state in ("connecting", "on"):
             self._pulse += 0.05 * self._direction
+
             if self._pulse >= 1.0:
                 self._pulse = 1.0
                 self._direction = -1
+
             elif self._pulse <= 0.0:
                 self._pulse = 0.0
                 self._direction = 1
+
         else:
             self._pulse = 0.0
 
         self.update()
 
     def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
 
         colors = {
             "off": QColor(C_MUTED),
@@ -390,18 +511,19 @@ class StatusOrb(QWidget):
         if self._state in ("on", "connecting") and self._pulse > 0:
             glow = QColor(color)
             glow.setAlphaF(0.25 * self._pulse)
-            p.setBrush(glow)
-            p.setPen(Qt.NoPen)
-            p.drawEllipse(0, 0, 14, 14)
+            painter.setBrush(glow)
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(0, 0, 14, 14)
 
-        p.setBrush(color)
-        p.setPen(Qt.NoPen)
-        p.drawEllipse(3, 3, 8, 8)
+        painter.setBrush(color)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(3, 3, 8, 8)
 
 
 class Card(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
+
         self.setFrameShape(QFrame.NoFrame)
         self.setStyleSheet(
             f"background: {C_CARD}; border: 1px solid {C_BORDER}; border-radius: 10px;"
@@ -411,14 +533,18 @@ class Card(QFrame):
 class Divider(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
+
         self.setFrameShape(QFrame.HLine)
         self.setFrameShadow(QFrame.Plain)
-        self.setStyleSheet(f"color: {C_BORDER}; background: {C_BORDER}; max-height: 1px;")
+        self.setStyleSheet(
+            f"color: {C_BORDER}; background: {C_BORDER}; max-height: 1px;"
+        )
 
 
 class TagLabel(QLabel):
     def __init__(self, text: str, color: str = C_ACCENT2, parent=None):
         super().__init__(text, parent)
+
         self.setStyleSheet(
             f"color: {color}; background: rgba(0,153,255,0.10); "
             f"border: 1px solid rgba(0,153,255,0.25); border-radius: 4px; "
@@ -433,34 +559,63 @@ class TagLabel(QLabel):
 class SettingsDialog(QDialog):
     def __init__(self, parent, settings: dict, platform_name: str):
         super().__init__(parent)
+
         self.setWindowTitle("Настройки — BareBone VPN")
         self.setFixedWidth(560)
         self.setStyleSheet(
             STYLESHEET
             + f"""
-            QDialog {{ background: {C_BG}; border: 1px solid {C_BORDER}; border-radius: 12px; }}
+            QDialog {{
+                background: {C_BG};
+                border: 1px solid {C_BORDER};
+                border-radius: 12px;
+            }}
         """
         )
 
         s = settings
 
-        self.auto_fetch_config_checkbox = QCheckBox("Получать конфиг автоматически с HTTP-сервера")
-        self.auto_fetch_config_checkbox.setChecked(bool(s.get("auto_fetch_config", DEFAULT_AUTO_FETCH_CONFIG)))
+        self.bootstrap_enabled_checkbox = QCheckBox(
+            "Использовать начальную комнату для получения личной комнаты"
+        )
+        self.bootstrap_enabled_checkbox.setChecked(
+            bool(s.get("bootstrap_enabled", DEFAULT_BOOTSTRAP_ENABLED))
+        )
+
+        self.client_id_input = QLineEdit(s.get("client_id", ""))
+        self.client_id_input.setReadOnly(True)
+
+        self.bootstrap_room_input = QLineEdit(
+            s.get("bootstrap_room_id", DEFAULT_BOOTSTRAP_ROOM_ID)
+        )
+
+        self.bootstrap_key_input = QLineEdit(
+            s.get("bootstrap_key", DEFAULT_BOOTSTRAP_KEY)
+        )
+        self.bootstrap_key_input.setEchoMode(QLineEdit.Password)
+
+        self.bootstrap_token_input = QLineEdit(
+            s.get("bootstrap_token", DEFAULT_BOOTSTRAP_TOKEN)
+        )
+        self.bootstrap_token_input.setEchoMode(QLineEdit.Password)
+
+        self.auto_fetch_config_checkbox = QCheckBox("")
+        self.auto_fetch_config_checkbox.setChecked(False)
+        self.auto_fetch_config_checkbox.hide()
 
         self.config_url_input = QLineEdit(s.get("config_url", DEFAULT_CONFIG_URL))
+        self.config_url_input.hide()
+
         self.config_token_input = QLineEdit(s.get("config_token", DEFAULT_CONFIG_TOKEN))
         self.config_token_input.setEchoMode(QLineEdit.Password)
-
-        self.bootstrap_enabled_checkbox = QCheckBox("Автоматическая первичная настройка через стартовую комнату")
-        self.bootstrap_enabled_checkbox.setChecked(bool(s.get("bootstrap_enabled", DEFAULT_BOOTSTRAP_ENABLED)))
-
-        self.bootstrap_room_input = QLineEdit(s.get("bootstrap_room_id", DEFAULT_BOOTSTRAP_ROOM_ID))
-        self.bootstrap_key_input = QLineEdit(s.get("bootstrap_key", DEFAULT_BOOTSTRAP_KEY))
-        self.bootstrap_key_input.setEchoMode(QLineEdit.Password)
+        self.config_token_input.hide()
 
         self.provider_input = QLineEdit(s.get("provider", DEFAULT_PROVIDER))
         self.room_id_input = QLineEdit(s.get("room_id", DEFAULT_ROOM_ID))
-        self.encryption_key_input = QLineEdit(s.get("encryption_key", DEFAULT_ENCRYPTION_KEY))
+
+        self.encryption_key_input = QLineEdit(
+            s.get("encryption_key", DEFAULT_ENCRYPTION_KEY)
+        )
         self.encryption_key_input.setEchoMode(QLineEdit.Password)
 
         self.dns_input = QLineEdit(s.get("dns_server", DEFAULT_DNS_SERVER))
@@ -470,35 +625,36 @@ class SettingsDialog(QDialog):
         self.socks_port_input.setRange(1, 65535)
         self.socks_port_input.setValue(int(s.get("socks_port", DEFAULT_SOCKS_PORT)))
 
-        self.network_service_input = QLineEdit(s.get("network_service", DEFAULT_NETWORK_SERVICE))
+        self.network_service_input = QLineEdit(
+            s.get("network_service", DEFAULT_NETWORK_SERVICE)
+        )
 
         self.auto_connect_checkbox = QCheckBox("Подключаться автоматически при запуске")
         self.auto_connect_checkbox.setChecked(bool(s.get("auto_connect", False)))
 
-        self.auto_refresh_checkbox = QCheckBox("Автообновление через HTTP каждые 5 минут")
-        self.auto_refresh_checkbox.setChecked(bool(s.get("auto_refresh", False)))
+        self.auto_refresh_checkbox = QCheckBox("")
+        self.auto_refresh_checkbox.setChecked(False)
+        self.auto_refresh_checkbox.hide()
 
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(24, 24, 24, 24)
 
         title = QLabel("НАСТРОЙКИ")
-        title.setStyleSheet(f"color: {C_MUTED}; font-size: 10px; letter-spacing: 2px;")
+        title.setStyleSheet(
+            f"color: {C_MUTED}; font-size: 10px; letter-spacing: 2px;"
+        )
         layout.addWidget(title)
 
-        layout.addWidget(self._section("АВТОМАТИЧЕСКАЯ НАСТРОЙКА"))
+        layout.addWidget(self._section("НАЧАЛЬНАЯ КОМНАТА"))
         layout.addWidget(self.bootstrap_enabled_checkbox)
+        layout.addLayout(self._row("Client ID", self.client_id_input))
         layout.addLayout(self._row("Bootstrap Room", self.bootstrap_room_input))
         layout.addLayout(self._row("Bootstrap Key", self.bootstrap_key_input))
+        layout.addLayout(self._row("Bootstrap Token", self.bootstrap_token_input))
         layout.addWidget(Divider())
 
-        layout.addWidget(self._section("HTTP-КОНФИГ, РЕЗЕРВНЫЙ РЕЖИМ"))
-        layout.addWidget(self.auto_fetch_config_checkbox)
-        layout.addLayout(self._row("URL конфига", self.config_url_input))
-        layout.addLayout(self._row("Токен", self.config_token_input))
-        layout.addWidget(Divider())
-
-        layout.addWidget(self._section("ЛИЧНАЯ КОМНАТА"))
+        layout.addWidget(self._section("РУЧНОЕ ПОДКЛЮЧЕНИЕ"))
         layout.addLayout(self._row("Провайдер", self.provider_input))
         layout.addLayout(self._row("Room ID", self.room_id_input))
         layout.addLayout(self._row("Ключ шифрования", self.encryption_key_input))
@@ -516,7 +672,6 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(self._section("ДОПОЛНИТЕЛЬНО"))
         layout.addWidget(self.auto_connect_checkbox)
-        layout.addWidget(self.auto_refresh_checkbox)
 
         close_btn = QPushButton("Сохранить и закрыть")
         close_btn.setMinimumHeight(38)
@@ -525,11 +680,12 @@ class SettingsDialog(QDialog):
         layout.addSpacing(4)
         layout.addWidget(close_btn)
 
-        for w in [
-            self.config_url_input,
-            self.config_token_input,
+        for widget in [
             self.bootstrap_room_input,
             self.bootstrap_key_input,
+            self.bootstrap_token_input,
+            self.config_url_input,
+            self.config_token_input,
             self.provider_input,
             self.room_id_input,
             self.encryption_key_input,
@@ -537,43 +693,48 @@ class SettingsDialog(QDialog):
             self.socks_host_input,
             self.network_service_input,
         ]:
-            w.textChanged.connect(self.auto_save_to_parent)
+            widget.textChanged.connect(self.auto_save_to_parent)
 
         self.socks_port_input.valueChanged.connect(self.auto_save_to_parent)
 
-        for cb in [
+        for checkbox in [
+            self.bootstrap_enabled_checkbox,
             self.auto_connect_checkbox,
             self.auto_refresh_checkbox,
             self.auto_fetch_config_checkbox,
-            self.bootstrap_enabled_checkbox,
         ]:
-            cb.stateChanged.connect(self.auto_save_to_parent)
+            checkbox.stateChanged.connect(self.auto_save_to_parent)
 
-        self.auto_fetch_config_checkbox.stateChanged.connect(self.update_fields_state)
         self.bootstrap_enabled_checkbox.stateChanged.connect(self.update_fields_state)
 
         self.update_fields_state()
 
     def _section(self, text: str) -> QLabel:
-        lbl = QLabel(text)
-        lbl.setStyleSheet(f"color: {C_MUTED}; font-size: 10px; letter-spacing: 1.5px; margin-top: 4px;")
-        return lbl
+        label = QLabel(text)
+        label.setStyleSheet(
+            f"color: {C_MUTED}; font-size: 10px; letter-spacing: 1.5px; margin-top: 4px;"
+        )
+        return label
 
     def _row(self, label: str, widget: QWidget) -> QHBoxLayout:
-        lbl = QLabel(label)
-        lbl.setFixedWidth(150)
-        lbl.setStyleSheet(f"color: {C_LABEL}; font-size: 11px;")
+        label_widget = QLabel(label)
+        label_widget.setFixedWidth(150)
+        label_widget.setStyleSheet(f"color: {C_LABEL}; font-size: 11px;")
 
         row = QHBoxLayout()
         row.setSpacing(12)
-        row.addWidget(lbl)
+        row.addWidget(label_widget)
         row.addWidget(widget)
+
         return row
 
     def auto_save_to_parent(self):
         parent = self.parent()
 
-        if parent is None or not hasattr(parent, "settings") or not hasattr(parent, "save_settings"):
+        if parent is None:
+            return
+
+        if not hasattr(parent, "settings") or not hasattr(parent, "save_settings"):
             return
 
         parent.settings = self.values()
@@ -583,31 +744,44 @@ class SettingsDialog(QDialog):
             parent.update_state()
 
     def update_fields_state(self):
-        http_auto = self.auto_fetch_config_checkbox.isChecked()
         bootstrap_enabled = self.bootstrap_enabled_checkbox.isChecked()
-
-        self.config_url_input.setEnabled(http_auto)
-        self.config_token_input.setEnabled(http_auto)
 
         self.bootstrap_room_input.setEnabled(bootstrap_enabled)
         self.bootstrap_key_input.setEnabled(bootstrap_enabled)
+        self.bootstrap_token_input.setEnabled(bootstrap_enabled)
 
-        manual_personal_enabled = not http_auto
-        self.provider_input.setEnabled(manual_personal_enabled)
-        self.room_id_input.setEnabled(manual_personal_enabled)
-        self.encryption_key_input.setEnabled(manual_personal_enabled)
+        manual_enabled = not bootstrap_enabled
+
+        self.provider_input.setEnabled(manual_enabled)
+        self.room_id_input.setEnabled(manual_enabled)
+        self.encryption_key_input.setEnabled(manual_enabled)
 
     def values(self) -> dict:
-        return {
-            "client_id": self.parent().settings.get("client_id", generate_client_id()) if self.parent() else generate_client_id(),
+        old = {}
 
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "settings"):
+            old = dict(parent.settings)
+
+        return {
             "bootstrap_enabled": self.bootstrap_enabled_checkbox.isChecked(),
             "bootstrap_provider": DEFAULT_BOOTSTRAP_PROVIDER,
             "bootstrap_room_id": self.bootstrap_room_input.text().strip() or DEFAULT_BOOTSTRAP_ROOM_ID,
             "bootstrap_key": self.bootstrap_key_input.text().strip() or DEFAULT_BOOTSTRAP_KEY,
-            "bootstrap_token": self.parent().settings.get("bootstrap_token", DEFAULT_BOOTSTRAP_TOKEN) if self.parent() else DEFAULT_BOOTSTRAP_TOKEN,
+            "bootstrap_token": self.bootstrap_token_input.text().strip() or DEFAULT_BOOTSTRAP_TOKEN,
+            "bootstrap_dns_server": DEFAULT_BOOTSTRAP_DNS_SERVER,
 
-            "auto_fetch_config": self.auto_fetch_config_checkbox.isChecked(),
+            "client_id": old.get("client_id")
+            or self.client_id_input.text().strip()
+            or generate_client_id(),
+
+            "personal_provider": old.get("personal_provider", ""),
+            "personal_room_id": old.get("personal_room_id", ""),
+            "personal_encryption_key": old.get("personal_encryption_key", ""),
+            "personal_transport": old.get("personal_transport", ""),
+            "personal_dns_server": old.get("personal_dns_server", ""),
+
+            "auto_fetch_config": False,
             "config_url": self.config_url_input.text().strip() or DEFAULT_CONFIG_URL,
             "config_token": self.config_token_input.text().strip() or DEFAULT_CONFIG_TOKEN,
 
@@ -621,7 +795,7 @@ class SettingsDialog(QDialog):
             "network_service": self.network_service_input.text().strip() or DEFAULT_NETWORK_SERVICE,
 
             "auto_connect": self.auto_connect_checkbox.isChecked(),
-            "auto_refresh": self.auto_refresh_checkbox.isChecked(),
+            "auto_refresh": False,
         }
 
     def accept(self):
@@ -690,11 +864,11 @@ class MainWindow(QMainWindow):
         self.client_log_file = None
         self.client_log_path = get_log_path()
         self.client_log_position = 0
-
         self.current_config = None
         self.is_reconnecting = False
 
         self.settings = self.load_settings()
+        self.save_settings()
 
         self.log_timer = QTimer(self)
         self.log_timer.setInterval(LOG_READ_INTERVAL_MS)
@@ -721,46 +895,52 @@ class MainWindow(QMainWindow):
         root_layout.setSpacing(0)
 
         top_widget = QWidget()
+
         top_layout = QVBoxLayout(top_widget)
         top_layout.setContentsMargins(20, 20, 20, 14)
         top_layout.setSpacing(14)
 
         header = QHBoxLayout()
 
-        logo_lbl = QLabel("●  BareBone")
-        logo_lbl.setStyleSheet(
+        logo_label = QLabel("●  BareBone")
+        logo_label.setStyleSheet(
             f"color: {C_ACCENT}; font-size: 18px; font-weight: 700; letter-spacing: 2px;"
         )
 
         self._provider_tag = TagLabel("wbstream")
         self._mode_tag = TagLabel("bootstrap", C_MUTED)
 
-        header.addWidget(logo_lbl)
+        header.addWidget(logo_label)
         header.addSpacing(10)
         header.addWidget(self._provider_tag)
         header.addWidget(self._mode_tag)
         header.addStretch()
 
-        settings_btn = QPushButton("⚙")
-        settings_btn.setFixedSize(32, 32)
-        settings_btn.setToolTip("Настройки")
-        settings_btn.setStyleSheet(
-            f"background: {C_CARD}; border: 1px solid {C_BORDER}; "
-            f"border-radius: 6px; color: {C_LABEL}; font-size: 14px; padding: 0;"
-        )
-        settings_btn.clicked.connect(self.open_settings)
+        self.rotate_button = QPushButton("↻")
+        self.rotate_button.setObjectName("btn_icon")
+        self.rotate_button.setFixedSize(32, 32)
+        self.rotate_button.setToolTip("Обновить личную комнату")
+        self.rotate_button.clicked.connect(self.rotate_personal_room)
 
-        header.addWidget(settings_btn)
+        settings_button = QPushButton("⚙")
+        settings_button.setObjectName("btn_icon")
+        settings_button.setFixedSize(32, 32)
+        settings_button.setToolTip("Настройки")
+        settings_button.clicked.connect(self.open_settings)
+
+        header.addWidget(self.rotate_button)
+        header.addWidget(settings_button)
+
         top_layout.addLayout(header)
 
         status_card = Card()
-        status_card.setFixedHeight(110)
+        status_card.setFixedHeight(95)
 
-        sc_layout = QVBoxLayout(status_card)
-        sc_layout.setContentsMargins(20, 16, 20, 16)
-        sc_layout.setSpacing(6)
+        status_layout = QVBoxLayout(status_card)
+        status_layout.setContentsMargins(20, 16, 20, 16)
+        status_layout.setSpacing(6)
 
-        row1 = QHBoxLayout()
+        status_row = QHBoxLayout()
 
         self._orb = StatusOrb()
 
@@ -769,25 +949,29 @@ class MainWindow(QMainWindow):
             f"color: {C_TEXT}; font-size: 20px; font-weight: 700; letter-spacing: 2px;"
         )
 
-        row1.addWidget(self._orb, alignment=Qt.AlignVCenter)
-        row1.addSpacing(8)
-        row1.addWidget(self._status_label, alignment=Qt.AlignVCenter)
-        row1.addStretch()
+        status_row.addWidget(self._orb, alignment=Qt.AlignVCenter)
+        status_row.addSpacing(8)
+        status_row.addWidget(self._status_label, alignment=Qt.AlignVCenter)
+        status_row.addStretch()
 
-        sc_layout.addLayout(row1)
+        status_layout.addLayout(status_row)
 
         self._addr_label = QLabel("SOCKS5  127.0.0.1:8808")
-        self._addr_label.setStyleSheet(f"color: {C_MUTED}; font-size: 11px; letter-spacing: 0.5px;")
-        sc_layout.addWidget(self._addr_label)
+        self._addr_label.setStyleSheet(
+            f"color: {C_MUTED}; font-size: 11px; letter-spacing: 0.5px;"
+        )
+        status_layout.addWidget(self._addr_label)
 
         self._client_label = QLabel("")
-        self._client_label.setStyleSheet(f"color: {C_MUTED}; font-size: 10px; letter-spacing: 0.5px;")
-        sc_layout.addWidget(self._client_label)
+        self._client_label.hide()
+
+        self._room_label = QLabel("")
+        self._room_label.hide()
 
         top_layout.addWidget(status_card)
 
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
+        button_row = QHBoxLayout()
+        button_row.setSpacing(10)
 
         self.connect_button = QPushButton("ВКЛЮЧИТЬ")
         self.connect_button.setObjectName("btn_connect")
@@ -802,15 +986,16 @@ class MainWindow(QMainWindow):
         self.logs_button.setFixedWidth(90)
         self.logs_button.setMinimumHeight(46)
 
-        btn_row.addWidget(self.connect_button, 3)
-        btn_row.addWidget(self.disconnect_button, 2)
-        btn_row.addWidget(self.logs_button)
+        button_row.addWidget(self.connect_button, 3)
+        button_row.addWidget(self.disconnect_button, 2)
+        button_row.addWidget(self.logs_button)
 
-        top_layout.addLayout(btn_row)
+        top_layout.addLayout(button_row)
 
         root_layout.addWidget(top_widget)
 
         log_widget = QWidget()
+
         log_layout = QVBoxLayout(log_widget)
         log_layout.setContentsMargins(20, 0, 20, 14)
         log_layout.setSpacing(6)
@@ -823,7 +1008,9 @@ class MainWindow(QMainWindow):
         log_layout.addWidget(self.output)
 
         footer = QLabel("BareBone VPN Manager  •  WebRTC tunnel")
-        footer.setStyleSheet(f"color: {C_MUTED}; font-size: 10px; letter-spacing: 0.5px;")
+        footer.setStyleSheet(
+            f"color: {C_MUTED}; font-size: 10px; letter-spacing: 0.5px;"
+        )
         footer.setAlignment(Qt.AlignCenter)
 
         log_layout.addWidget(footer)
@@ -851,13 +1038,15 @@ class MainWindow(QMainWindow):
 
         if running:
             self._set_status("ВКЛЮЧЕНО", "on")
+
         elif self.is_reconnecting:
             self._set_status("ПЕРЕПОДКЛЮЧЕНИЕ...", "connecting")
+
         else:
             self._set_status("ВЫКЛЮЧЕНО", "off")
 
-        mode = self.get_mode_label()
-        provider = self.settings.get("provider", DEFAULT_PROVIDER)
+        mode = self.connection_mode_label()
+        provider = self.active_provider_label()
 
         self._provider_tag.setText(provider)
         self._mode_tag.setText(mode)
@@ -867,28 +1056,31 @@ class MainWindow(QMainWindow):
             f"•  HTTP  {self.socks_host()}:{self.socks_port() + 1}"
         )
 
-        client_id = self.settings.get("client_id", "")
-        room_id = self.settings.get("room_id", "")
-
-        if room_id:
-            short_room = room_id if len(room_id) <= 34 else room_id[:31] + "..."
-            self._client_label.setText(f"client {client_id}  •  room {short_room}")
-        else:
-            self._client_label.setText(f"client {client_id}  •  личная комната не получена")
+        self._client_label.setText("")
+        self._room_label.setText("")
 
         self.connect_button.setEnabled(not running and not self.is_reconnecting)
         self.disconnect_button.setEnabled(running or self.is_reconnecting)
 
-    def get_mode_label(self) -> str:
-        if self.settings.get("auto_fetch_config", False):
-            return "http"
+        self.rotate_button.setEnabled(
+            not self.is_reconnecting
+            and bool(self.settings.get("bootstrap_enabled", True))
+        )
 
+    def connection_mode_label(self) -> str:
         if self.settings.get("bootstrap_enabled", DEFAULT_BOOTSTRAP_ENABLED):
-            if self.has_personal_config():
-                return "personal"
             return "bootstrap"
 
         return "manual"
+
+    def active_provider_label(self) -> str:
+        if self.settings.get("bootstrap_enabled", DEFAULT_BOOTSTRAP_ENABLED):
+            return (
+                self.settings.get("personal_provider")
+                or self.settings.get("bootstrap_provider", DEFAULT_BOOTSTRAP_PROVIDER)
+            )
+
+        return self.settings.get("provider", DEFAULT_PROVIDER)
 
     def _set_status(self, text: str, state: str):
         colors = {
@@ -908,8 +1100,10 @@ class MainWindow(QMainWindow):
 
     def toggle_logs(self):
         visible = self._log_widget.isVisible()
+
         self._log_widget.setVisible(not visible)
         self.logs_button.setText("Логи ▲" if not visible else "Логи ▼")
+
         self.adjustSize()
 
     def append_log(self, text: str):
@@ -917,14 +1111,15 @@ class MainWindow(QMainWindow):
             return
 
         self.output.appendPlainText(str(text).rstrip())
-        self.output.verticalScrollBar().setValue(self.output.verticalScrollBar().maximum())
+        self.output.verticalScrollBar().setValue(
+            self.output.verticalScrollBar().maximum()
+        )
 
     def open_settings(self):
         dialog = SettingsDialog(self, self.settings, self.platform_name)
         dialog.exec()
 
         self.settings = dialog.values()
-        self.ensure_client_id()
         self.save_settings()
         self.update_state()
         self.append_log("Настройки сохранены.")
@@ -935,15 +1130,22 @@ class MainWindow(QMainWindow):
 
     def load_settings(self) -> dict:
         defaults = {
-            "client_id": generate_client_id(),
-
             "bootstrap_enabled": DEFAULT_BOOTSTRAP_ENABLED,
             "bootstrap_provider": DEFAULT_BOOTSTRAP_PROVIDER,
             "bootstrap_room_id": DEFAULT_BOOTSTRAP_ROOM_ID,
             "bootstrap_key": DEFAULT_BOOTSTRAP_KEY,
             "bootstrap_token": DEFAULT_BOOTSTRAP_TOKEN,
+            "bootstrap_dns_server": DEFAULT_BOOTSTRAP_DNS_SERVER,
 
-            "auto_fetch_config": DEFAULT_AUTO_FETCH_CONFIG,
+            "client_id": "",
+
+            "personal_provider": "",
+            "personal_room_id": "",
+            "personal_encryption_key": "",
+            "personal_transport": "",
+            "personal_dns_server": "",
+
+            "auto_fetch_config": False,
             "config_url": DEFAULT_CONFIG_URL,
             "config_token": DEFAULT_CONFIG_TOKEN,
 
@@ -963,28 +1165,37 @@ class MainWindow(QMainWindow):
         path = get_settings_path()
 
         if not path.exists():
+            defaults["client_id"] = generate_client_id()
             return defaults
 
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             defaults.update(data)
 
-            if not defaults.get("client_id"):
+            defaults["auto_fetch_config"] = False
+            defaults["auto_refresh"] = False
+
+            if not str(defaults.get("client_id", "")).strip():
                 defaults["client_id"] = generate_client_id()
 
             for key, value in [
-                ("provider", DEFAULT_PROVIDER),
-                ("dns_server", DEFAULT_DNS_SERVER),
                 ("bootstrap_provider", DEFAULT_BOOTSTRAP_PROVIDER),
                 ("bootstrap_room_id", DEFAULT_BOOTSTRAP_ROOM_ID),
                 ("bootstrap_key", DEFAULT_BOOTSTRAP_KEY),
                 ("bootstrap_token", DEFAULT_BOOTSTRAP_TOKEN),
+                ("bootstrap_dns_server", DEFAULT_BOOTSTRAP_DNS_SERVER),
+                ("config_url", DEFAULT_CONFIG_URL),
+                ("config_token", DEFAULT_CONFIG_TOKEN),
+                ("provider", DEFAULT_PROVIDER),
+                ("dns_server", DEFAULT_DNS_SERVER),
             ]:
                 if not defaults.get(key):
                     defaults[key] = value
 
             return defaults
+
         except Exception:
+            defaults["client_id"] = generate_client_id()
             return defaults
 
     def save_settings(self):
@@ -992,16 +1203,6 @@ class MainWindow(QMainWindow):
             json.dumps(self.settings, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-
-    def ensure_client_id(self) -> str:
-        client_id = str(self.settings.get("client_id", "")).strip()
-
-        if not client_id:
-            client_id = generate_client_id()
-            self.settings["client_id"] = client_id
-            self.save_settings()
-
-        return client_id
 
     def socks_host(self) -> str:
         return self.settings.get("socks_host", DEFAULT_SOCKS_HOST)
@@ -1015,33 +1216,17 @@ class MainWindow(QMainWindow):
     def is_running(self) -> bool:
         return self.client_process is not None and self.client_process.poll() is None
 
-    def has_personal_config(self) -> bool:
-        return bool(
-            str(self.settings.get("provider", "")).strip()
-            and str(self.settings.get("room_id", "")).strip()
-            and str(self.settings.get("encryption_key", "")).strip()
-        )
-
-    def apply_personal_config(self, cfg: dict):
-        cfg = normalize_config(cfg)
-
-        self.settings.update(
-            {
-                "provider": cfg["provider"],
-                "room_id": cfg["room_id"],
-                "encryption_key": cfg["encryption_key"],
-                "dns_server": cfg.get("dns_server", DEFAULT_DNS_SERVER),
-            }
-        )
-
-        self.save_settings()
-        self.update_state()
-
     # ----------------------------------------------------------
     # Bootstrap
     # ----------------------------------------------------------
 
-    def build_bootstrap_args(self, action: str) -> list[str]:
+    def bootstrap_config_present(self) -> bool:
+        return bool(
+            str(self.settings.get("personal_room_id", "")).strip()
+            and str(self.settings.get("personal_encryption_key", "")).strip()
+        )
+
+    def run_bootstrap(self, action: str) -> dict:
         binary = self.platform.binary_path()
 
         if not binary.exists():
@@ -1050,31 +1235,64 @@ class MainWindow(QMainWindow):
         if sys.platform != "win32":
             binary.chmod(0o755)
 
-        client_id = self.ensure_client_id()
+        client_id = str(self.settings.get("client_id", "")).strip()
 
-        return [
+        if not client_id:
+            client_id = generate_client_id()
+            self.settings["client_id"] = client_id
+            self.save_settings()
+
+        bootstrap_provider = str(
+            self.settings.get("bootstrap_provider", DEFAULT_BOOTSTRAP_PROVIDER)
+        ).strip()
+
+        bootstrap_room_id = str(
+            self.settings.get("bootstrap_room_id", DEFAULT_BOOTSTRAP_ROOM_ID)
+        ).strip()
+
+        bootstrap_key = str(
+            self.settings.get("bootstrap_key", DEFAULT_BOOTSTRAP_KEY)
+        ).strip()
+
+        bootstrap_token = str(
+            self.settings.get("bootstrap_token", DEFAULT_BOOTSTRAP_TOKEN)
+        ).strip()
+
+        bootstrap_dns = str(
+            self.settings.get("bootstrap_dns_server", DEFAULT_BOOTSTRAP_DNS_SERVER)
+        ).strip()
+
+        if not bootstrap_provider:
+            raise RuntimeError("Bootstrap provider is empty.")
+
+        if not bootstrap_room_id:
+            raise RuntimeError("Bootstrap room id is empty.")
+
+        if not bootstrap_key:
+            raise RuntimeError("Bootstrap key is empty.")
+
+        if not bootstrap_token:
+            raise RuntimeError("Bootstrap token is empty.")
+
+        data_dir = get_data_dir() / "bootstrap"
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        args = [
             str(binary),
             "-mode", BOOTSTRAP_MODE_NAME,
             "-link", DEFAULT_LINK_TYPE,
             "-transport", DEFAULT_TRANSPORT,
-            "-provider", self.settings.get("bootstrap_provider", DEFAULT_BOOTSTRAP_PROVIDER),
-            "-id", self.settings.get("bootstrap_room_id", DEFAULT_BOOTSTRAP_ROOM_ID),
-            "-key", self.settings.get("bootstrap_key", DEFAULT_BOOTSTRAP_KEY),
-            "-data", str(get_data_dir()),
-            "-dns", self.settings.get("dns_server", DEFAULT_DNS_SERVER),
-
+            "-provider", bootstrap_provider,
+            "-id", bootstrap_room_id,
+            "-key", bootstrap_key,
+            "-data", str(data_dir),
+            "-dns", bootstrap_dns,
             "-bootstrap-action", action,
             "-client-id", client_id,
-            "-bootstrap-token", self.settings.get("bootstrap_token", DEFAULT_BOOTSTRAP_TOKEN),
+            "-bootstrap-token", bootstrap_token,
         ]
 
-    def request_config_via_bootstrap(self, rotate: bool = False) -> dict:
-        action = "rotate" if rotate else "register"
-
-        self.append_log("Подключение к стартовой комнате...")
-        self.append_log(f"Bootstrap action: {action}")
-
-        args = self.build_bootstrap_args(action)
+        self.append_log(f"Bootstrap: action={action}, client_id={client_id}")
 
         code, output = run_command(
             args,
@@ -1082,87 +1300,99 @@ class MainWindow(QMainWindow):
             windows_no_window=True,
         )
 
-        get_bootstrap_log_path().write_text(output, encoding="utf-8", errors="replace")
-
-        if output:
-            self.append_log(output)
+        self.append_log(output)
 
         if code != 0:
-            raise RuntimeError(
-                "Не удалось получить конфиг через стартовую комнату. "
-                "Нужен режим BareBoneVPN -mode bootstrap-cnc на Go-стороне."
-            )
+            raise RuntimeError(f"Bootstrap failed with code {code}")
 
-        config = self.extract_config_from_bootstrap_output(output)
-        return normalize_config(config)
+        cfg = extract_bootstrap_config(output)
 
-    def extract_config_from_bootstrap_output(self, output: str) -> dict:
-        lines = output.splitlines()
+        self.settings.update(
+            {
+                "client_id": cfg["client_id"],
+                "personal_provider": cfg["provider"],
+                "personal_room_id": cfg["room_id"],
+                "personal_encryption_key": cfg["encryption_key"],
+                "personal_transport": cfg["transport"],
+                "personal_dns_server": cfg["dns_server"],
 
-        json_candidates = []
-
-        for line in lines:
-            text = line.strip()
-
-            if not text:
-                continue
-
-            if text.startswith("{") and text.endswith("}"):
-                json_candidates.append(text)
-
-            if text.startswith("BB_CONFIG_JSON="):
-                json_candidates.append(text[len("BB_CONFIG_JSON="):].strip())
-
-        last_error = None
-
-        for candidate in reversed(json_candidates):
-            try:
-                data = json.loads(candidate)
-
-                if data.get("type") == "CONFIG":
-                    return {
-                        "provider": data.get("provider", DEFAULT_PROVIDER),
-                        "room_id": data.get("room_id", ""),
-                        "encryption_key": data.get("encryption_key", ""),
-                        "dns_server": data.get("dns_server", DEFAULT_DNS_SERVER),
-                        "transport": data.get("transport", DEFAULT_TRANSPORT),
-                    }
-
-                if "room_id" in data and "encryption_key" in data:
-                    return data
-
-            except Exception as exc:
-                last_error = exc
-
-        if last_error is not None:
-            raise RuntimeError(f"Bootstrap returned invalid config JSON: {last_error}")
-
-        raise RuntimeError(
-            "Bootstrap не вернул CONFIG. Ожидается строка JSON вида "
-            '{"type":"CONFIG","provider":"wbstream","room_id":"...","encryption_key":"...","dns_server":"1.1.1.1:53"}'
+                "provider": cfg["provider"],
+                "room_id": cfg["room_id"],
+                "encryption_key": cfg["encryption_key"],
+                "dns_server": cfg["dns_server"],
+            }
         )
 
-    def ensure_personal_config_before_connect(self) -> dict:
-        if self.settings.get("auto_fetch_config", False):
-            cfg = fetch_connection_http(
-                self.settings.get("config_url", DEFAULT_CONFIG_URL),
-                self.settings.get("config_token", DEFAULT_CONFIG_TOKEN),
-            )
-            self.apply_personal_config(cfg)
-            return cfg
+        self.save_settings()
 
-        if self.has_personal_config():
-            return validate_manual_config(
-                self.settings.get("provider", DEFAULT_PROVIDER),
-                self.settings.get("room_id", ""),
-                self.settings.get("encryption_key", ""),
-                self.settings.get("dns_server", DEFAULT_DNS_SERVER),
+        self.append_log(f"Получена личная комната: {cfg['room_id']}")
+
+        return cfg
+
+    def rotate_personal_room(self):
+        was_running = self.is_running()
+
+        try:
+            self.is_reconnecting = True
+            self._set_status("ОБНОВЛЕНИЕ...", "connecting")
+            self.update_state()
+            QApplication.processEvents()
+
+            self.append_log("=== Обновление личной комнаты ===")
+
+            if was_running:
+                self.append_log("Текущий туннель включён. Выполняю безопасное переподключение.")
+                self.disconnect_client()
+
+            cfg = self.run_bootstrap(DEFAULT_BOOTSTRAP_ACTION_ROTATE)
+            self.current_config = cfg
+
+            self.append_log("Личная комната обновлена.")
+
+            if was_running:
+                self.append_log("Переподключение к новой личной комнате.")
+                self.is_reconnecting = False
+                self.connect_client()
+            else:
+                self.is_reconnecting = False
+                self._set_status("ВЫКЛЮЧЕНО", "off")
+                self.update_state()
+
+        except Exception as exc:
+            self.is_reconnecting = False
+            self._set_status("ОШИБКА", "error")
+            self.append_log(
+                f"Ошибка обновления комнаты: {type(exc).__name__}: {exc}"
             )
 
+            if was_running and not self.is_running():
+                self.append_log("Пробую вернуть подключение на текущих сохранённых настройках.")
+
+                try:
+                    self.connect_client()
+                except Exception as reconnect_exc:
+                    self.append_log(
+                        f"Не удалось восстановить подключение: {type(reconnect_exc).__name__}: {reconnect_exc}"
+                    )
+
+            self.update_state()
+
+    # ----------------------------------------------------------
+    # Подключение
+    # ----------------------------------------------------------
+
+    def get_connection_config(self) -> dict:
         if self.settings.get("bootstrap_enabled", DEFAULT_BOOTSTRAP_ENABLED):
-            cfg = self.request_config_via_bootstrap(rotate=False)
-            self.apply_personal_config(cfg)
-            return cfg
+            if not self.bootstrap_config_present():
+                return self.run_bootstrap(DEFAULT_BOOTSTRAP_ACTION_REGISTER)
+
+            return {
+                "provider": self.settings.get("personal_provider") or DEFAULT_PROVIDER,
+                "room_id": self.settings.get("personal_room_id", ""),
+                "encryption_key": self.settings.get("personal_encryption_key", ""),
+                "dns_server": self.settings.get("personal_dns_server") or DEFAULT_DNS_SERVER,
+                "transport": self.settings.get("personal_transport") or DEFAULT_TRANSPORT,
+            }
 
         return validate_manual_config(
             self.settings.get("provider", DEFAULT_PROVIDER),
@@ -1170,13 +1400,6 @@ class MainWindow(QMainWindow):
             self.settings.get("encryption_key", ""),
             self.settings.get("dns_server", DEFAULT_DNS_SERVER),
         )
-
-    # ----------------------------------------------------------
-    # Подключение
-    # ----------------------------------------------------------
-
-    def get_connection_config(self) -> dict:
-        return self.ensure_personal_config_before_connect()
 
     def cleanup_old_client(self):
         self.append_log("Очистка старого состояния...")
@@ -1190,6 +1413,7 @@ class MainWindow(QMainWindow):
             try:
                 self.client_process.terminate()
                 self.client_process.wait(timeout=3)
+
             except Exception:
                 try:
                     self.client_process.kill()
@@ -1238,7 +1462,7 @@ class MainWindow(QMainWindow):
             str(binary),
             "-mode", "cnc",
             "-link", DEFAULT_LINK_TYPE,
-            "-transport", DEFAULT_TRANSPORT,
+            "-transport", cfg.get("transport", DEFAULT_TRANSPORT),
             "-provider", cfg["provider"],
             "-id", cfg["room_id"],
             "-key", cfg["encryption_key"],
@@ -1247,30 +1471,6 @@ class MainWindow(QMainWindow):
             "-socks-host", self.socks_host(),
             "-socks-port", str(self.socks_port()),
         ]
-
-    def start_client_process(self, cfg: dict):
-        args = self.build_client_args(cfg)
-
-        self.client_log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        self.client_log_file = open(
-            self.client_log_path,
-            "a",
-            encoding="utf-8",
-            buffering=1,
-        )
-
-        self.client_log_position = (
-            self.client_log_path.stat().st_size if self.client_log_path.exists() else 0
-        )
-
-        self.client_process = self.platform.start_process(args, self.client_log_file)
-        self.log_timer.start()
-
-        time.sleep(1)
-
-        if self.client_process.poll() is not None:
-            raise RuntimeError("BB вышел сразу. Смотри логи.")
 
     def wait_proxy_ready(self, timeout_seconds: int = 25) -> bool:
         deadline = time.time() + timeout_seconds
@@ -1284,12 +1484,10 @@ class MainWindow(QMainWindow):
             code, output = run_command(
                 [
                     "curl",
-                    "--max-time",
-                    "5",
+                    "--max-time", "5",
                     "--silent",
                     "--show-error",
-                    "--socks5-hostname",
-                    f"{self.socks_host()}:{self.socks_port()}",
+                    "--socks5-hostname", f"{self.socks_host()}:{self.socks_port()}",
                     "https://ifconfig.me",
                 ],
                 timeout=8,
@@ -1305,63 +1503,66 @@ class MainWindow(QMainWindow):
 
         return False
 
-    def connect_with_config(self, cfg: dict):
-        self.current_config = cfg
-
-        self.append_log(
-            f"Provider: {cfg['provider']}  |  Room: {cfg['room_id']}  |  "
-            f"DNS: {cfg.get('dns_server', DEFAULT_DNS_SERVER)}"
-        )
-
-        self.start_client_process(cfg)
-
-        if not self.wait_proxy_ready(timeout_seconds=25):
-            raise RuntimeError("Туннель не поднялся за 25 сек.")
-
-        self.platform.enable_system_proxy(
-            self.socks_host(),
-            self.socks_port(),
-            self.network_service(),
-        )
-
-        if self.settings.get("auto_refresh", False) and self.settings.get("auto_fetch_config", False):
-            self.config_timer.start()
-        else:
-            self.config_timer.stop()
-
-        self.append_log("Подключено.")
-        self._set_status("ВКЛЮЧЕНО", "on")
-        self.update_state()
-
     def connect_client(self):
         try:
             self._set_status("ПОДКЛЮЧЕНИЕ...", "connecting")
             QApplication.processEvents()
 
             self.append_log("=== Включение ===")
-            self.ensure_client_id()
             self.save_settings()
             self.cleanup_old_client()
 
             cfg = self.get_connection_config()
+            self.current_config = cfg
 
-            try:
-                self.connect_with_config(cfg)
-                return
-            except Exception as first_exc:
-                self.append_log(f"Первичное подключение не удалось: {type(first_exc).__name__}: {first_exc}")
+            self.append_log(
+                f"Provider: {cfg['provider']}  |  Room: {cfg['room_id']}  |  "
+                f"DNS: {cfg.get('dns_server', DEFAULT_DNS_SERVER)}"
+            )
 
-                if not self.settings.get("bootstrap_enabled", DEFAULT_BOOTSTRAP_ENABLED):
-                    raise
+            args = self.build_client_args(cfg)
 
-                self.append_log("Пробую обновить личную комнату через стартовую комнату...")
-                self.cleanup_old_client()
+            self.client_log_path.parent.mkdir(parents=True, exist_ok=True)
 
-                cfg = self.request_config_via_bootstrap(rotate=True)
-                self.apply_personal_config(cfg)
+            self.client_log_file = open(
+                self.client_log_path,
+                "a",
+                encoding="utf-8",
+                buffering=1,
+            )
 
-                self.cleanup_old_client()
-                self.connect_with_config(cfg)
+            self.client_log_position = (
+                self.client_log_path.stat().st_size
+                if self.client_log_path.exists()
+                else 0
+            )
+
+            self.client_process = self.platform.start_process(
+                args,
+                self.client_log_file,
+            )
+
+            self.log_timer.start()
+
+            time.sleep(1)
+
+            if self.client_process.poll() is not None:
+                raise RuntimeError("BareBoneVPN вышел сразу. Смотри логи.")
+
+            if not self.wait_proxy_ready(timeout_seconds=25):
+                raise RuntimeError("Туннель не поднялся за 25 сек. Проверь комнату и ключ.")
+
+            self.platform.enable_system_proxy(
+                self.socks_host(),
+                self.socks_port(),
+                self.network_service(),
+            )
+
+            self.config_timer.stop()
+
+            self.append_log("Подключено.")
+            self._set_status("ВКЛЮЧЕНО", "on")
+            self.update_state()
 
         except Exception as exc:
             self._set_status("ОШИБКА", "error")
@@ -1391,6 +1592,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.client_process.terminate()
                     self.client_process.wait(timeout=5)
+
                 except Exception:
                     try:
                         self.client_process.kill()
@@ -1428,10 +1630,15 @@ class MainWindow(QMainWindow):
     def read_client_logs(self):
         try:
             if self.client_log_path.exists():
-                with open(self.client_log_path, "r", encoding="utf-8", errors="replace") as f:
-                    f.seek(self.client_log_position)
-                    new_data = f.read()
-                    self.client_log_position = f.tell()
+                with open(
+                    self.client_log_path,
+                    "r",
+                    encoding="utf-8",
+                    errors="replace",
+                ) as file:
+                    file.seek(self.client_log_position)
+                    new_data = file.read()
+                    self.client_log_position = file.tell()
 
                 if new_data:
                     self.append_log(new_data)
@@ -1461,39 +1668,7 @@ class MainWindow(QMainWindow):
             self.update_state()
 
     def check_config_update(self):
-        if self.is_reconnecting or not self.settings.get("auto_fetch_config", False):
-            return
-
-        if not self.is_running():
-            return
-
-        try:
-            new_cfg = fetch_connection_http(
-                self.settings.get("config_url", DEFAULT_CONFIG_URL),
-                self.settings.get("config_token", DEFAULT_CONFIG_TOKEN),
-            )
-
-            if self.current_config == new_cfg:
-                self.append_log("Автопроверка: комната не изменилась.")
-                return
-
-            self.append_log("Автопроверка: комната изменилась, переподключаюсь.")
-
-            self.apply_personal_config(new_cfg)
-
-            self.is_reconnecting = True
-            self.update_state()
-
-            self.disconnect_client()
-            self.current_config = new_cfg
-            self.connect_client()
-
-        except Exception as exc:
-            self.append_log(f"Ошибка автообновления: {exc}")
-
-        finally:
-            self.is_reconnecting = False
-            self.update_state()
+        return
 
     def closeEvent(self, event):
         if self.is_running():
@@ -1507,8 +1682,10 @@ class MainWindow(QMainWindow):
             if reply == QMessageBox.Yes:
                 self.disconnect_client()
                 event.accept()
+
             else:
                 event.ignore()
+
         else:
             event.accept()
 
@@ -1520,6 +1697,11 @@ class MainWindow(QMainWindow):
 def run_app(platform: PlatformAdapter, platform_name: str):
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+
+    icon_path = Path(__file__).resolve().parent / "assets" / "icon.png"
+
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
     palette = QPalette()
     palette.setColor(QPalette.Window, QColor(C_BG))
@@ -1535,6 +1717,10 @@ def run_app(platform: PlatformAdapter, platform_name: str):
     app.setPalette(palette)
 
     window = MainWindow(platform, platform_name)
+
+    if icon_path.exists():
+        window.setWindowIcon(QIcon(str(icon_path)))
+
     window.show()
 
     sys.exit(app.exec())

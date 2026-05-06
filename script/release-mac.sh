@@ -55,6 +55,7 @@ pyinstaller \
     --clean \
     --windowed \
     --name "$APP_NAME" \
+    --icon assets/icon.icns \
     --add-binary "app/BareBoneVPN:." \
     --paths app \
     app/app_standalone.py

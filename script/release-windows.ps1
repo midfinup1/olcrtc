@@ -67,6 +67,7 @@ pyinstaller `
     --windowed `
     --name "$AppName" `
     --add-binary "app\BareBoneVPN.exe;." `
+    --icon assets/icon.ico `
     --paths app `
     app\app_windows.py
 
