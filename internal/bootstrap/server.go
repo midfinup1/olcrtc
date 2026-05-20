@@ -285,7 +285,13 @@ func (s *Server) runChatBootstrapLoop(ctx context.Context) error {
 func (s *Server) runOneChatBootstrap(ctx context.Context) error {
 	displayName := "BareBone Bootstrap Server"
 
-	transport := NewChatBootstrapTransport("", s.cfg.BootstrapRoom, displayName)
+	accessToken := strings.TrimSpace(os.Getenv("WB_ACCESS_TOKEN"))
+
+	if accessToken == "" {
+		logger.Warnf("WB_ACCESS_TOKEN is empty; chat bootstrap will try guest access")
+	}
+
+	transport := NewChatBootstrapTransport(accessToken, s.cfg.BootstrapRoom, displayName)
 
 	if err := transport.Connect(ctx); err != nil {
 		return err
