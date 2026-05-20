@@ -69,6 +69,8 @@ func (p *Peer) Connect(ctx context.Context) error {
 	roomCB := &lksdk.RoomCallback{
 		ParticipantCallback: lksdk.ParticipantCallback{
 			OnDataReceived: func(data []byte, _ lksdk.DataReceiveParams) {
+				log.Printf("WB Stream data received len=%d", len(data))
+
 				if p.onData != nil {
 					p.onData(data)
 				}
@@ -88,6 +90,8 @@ func (p *Peer) Connect(ctx context.Context) error {
 			},
 		},
 		OnDisconnected: func() {
+			log.Printf("WB Stream disconnected room=%s", p.roomURL)
+
 			if p.onEnded != nil {
 				p.onEnded("disconnected from livekit")
 			}
@@ -103,6 +107,8 @@ func (p *Peer) Connect(ctx context.Context) error {
 
 	p.room = room
 
+	log.Printf("WB Stream connected room=%s local_identity=%s", p.roomURL, room.LocalParticipant.Identity())
+
 	if err := p.publishPendingTracks(); err != nil {
 		return err
 	}
@@ -116,6 +122,10 @@ func (p *Peer) Connect(ctx context.Context) error {
 func (p *Peer) publishPendingTracks() error {
 	p.videoTrackMu.RLock()
 	defer p.videoTrackMu.RUnlock()
+
+	if p.room == nil || p.room.LocalParticipant == nil {
+		return ErrLiveKitNotConnected
+	}
 
 	for _, track := range p.videoTracks {
 		if _, err := p.room.LocalParticipant.PublishTrack(track, &lksdk.TrackPublicationOptions{
@@ -210,6 +220,8 @@ func (p *Peer) processSendQueue() {
 				lksdk.WithDataPublishReliable(true),
 			); err != nil {
 				log.Printf("WB Stream publish data error: %v", err)
+			} else {
+				log.Printf("WB Stream publish data ok len=%d topic=olcrtc", len(data))
 			}
 		}
 	}
@@ -222,6 +234,7 @@ func (p *Peer) Send(data []byte) error {
 
 	select {
 	case p.sendQueue <- data:
+		log.Printf("WB Stream queued data len=%d", len(data))
 		return nil
 
 	default:
