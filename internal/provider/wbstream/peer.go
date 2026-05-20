@@ -216,12 +216,11 @@ func (p *Peer) processSendQueue() {
 
 			if err := p.room.LocalParticipant.PublishDataPacket(
 				lksdk.UserData(data),
-				lksdk.WithDataPublishTopic("olcrtc"),
 				lksdk.WithDataPublishReliable(true),
 			); err != nil {
 				log.Printf("WB Stream publish data error: %v", err)
 			} else {
-				log.Printf("WB Stream publish data ok len=%d topic=olcrtc", len(data))
+				log.Printf("WB Stream publish data ok len=%d topic=<empty>", len(data))
 			}
 		}
 	}
