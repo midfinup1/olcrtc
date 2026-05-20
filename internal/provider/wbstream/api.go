@@ -47,7 +47,8 @@ type createRoomResponse struct {
 }
 
 type tokenResponse struct {
-	RoomToken string `json:"roomToken"`
+	RoomToken       string `json:"roomToken"`
+	ConnectionToken string `json:"connectionToken"`
 }
 
 func registerGuest(ctx context.Context, displayName string) (string, error) {
@@ -253,11 +254,16 @@ func getToken(ctx context.Context, accessToken, roomID, displayName string) (str
 		return "", fmt.Errorf("decode response: %w", err)
 	}
 
-	if strings.TrimSpace(res.RoomToken) == "" {
+	token := strings.TrimSpace(res.RoomToken)
+	if token == "" {
+		token = strings.TrimSpace(res.ConnectionToken)
+	}
+
+	if token == "" {
 		return "", errors.New("room token is empty")
 	}
 
-	return res.RoomToken, nil
+	return token, nil
 }
 
 func isWBRoomNotFoundError(err error) bool {
