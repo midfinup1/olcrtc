@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -194,6 +195,28 @@ func runBootstrapClient(ctx context.Context, cfg config) error {
 	dataDir, err := resolveDataDir(cfg.dataDir)
 	if err != nil {
 		return err
+	}
+
+	if strings.EqualFold(carrier, "wbstream") {
+		response, err := bootstrap.RunChatClient(ctx, bootstrap.ClientConfig{
+			BootstrapRoom:  cfg.roomID,
+			BootstrapKey:   cfg.keyHex,
+			BootstrapToken: cfg.bootstrapToken,
+			ClientID:        cfg.clientID,
+			RotateRoom:     strings.EqualFold(cfg.bootstrapAction, "rotate"),
+		})
+		if err != nil {
+			return err
+		}
+
+		rawResponse, err := json.Marshal(response)
+		if err != nil {
+			return fmt.Errorf("marshal bootstrap config json failed: %w", err)
+		}
+
+		fmt.Printf("BB_CONFIG_JSON=%s\n", string(rawResponse))
+
+		return nil
 	}
 
 	return bootstrap.RunClient(ctx, bootstrap.Config{
