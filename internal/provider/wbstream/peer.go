@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	wsURL = "wss://wbstream01-el.wb.ru:7880"
+	defaultWSURL = "wss://wbstream01-el.wb.ru:7880"
 )
 
 var (
-	ErrPeerClosed          = errors.New("peer closed")
-	ErrSendQueueFull      = errors.New("send queue full")
+	ErrPeerClosed           = errors.New("peer closed")
+	ErrSendQueueFull       = errors.New("send queue full")
 	ErrLiveKitNotConnected = errors.New("livekit room not connected")
 )
 
@@ -57,9 +57,13 @@ func NewPeer(ctx context.Context, roomURL, name string, onData func([]byte)) (*P
 }
 
 func (p *Peer) Connect(ctx context.Context) error {
-	token, err := p.getRoomToken(ctx)
+	token, serverURL, err := p.getRoomConnection(ctx)
 	if err != nil {
 		return fmt.Errorf("get room token: %w", err)
+	}
+
+	if strings.TrimSpace(serverURL) == "" {
+		serverURL = defaultWSURL
 	}
 
 	roomCB := &lksdk.RoomCallback{
@@ -90,7 +94,9 @@ func (p *Peer) Connect(ctx context.Context) error {
 		},
 	}
 
-	room, err := lksdk.ConnectToRoomWithToken(wsURL, token, roomCB, lksdk.WithAutoSubscribe(true))
+	log.Printf("WB Stream connecting LiveKit server=%s room=%s", serverURL, p.roomURL)
+
+	room, err := lksdk.ConnectToRoomWithToken(serverURL, token, roomCB, lksdk.WithAutoSubscribe(true))
 	if err != nil {
 		return fmt.Errorf("connect to room: %w", err)
 	}
@@ -122,10 +128,10 @@ func (p *Peer) publishPendingTracks() error {
 	return nil
 }
 
-func (p *Peer) getRoomToken(ctx context.Context) (string, error) {
+func (p *Peer) getRoomConnection(ctx context.Context) (string, string, error) {
 	accessToken, err := registerGuest(ctx, p.name)
 	if err != nil {
-		return "", fmt.Errorf("register guest: %w", err)
+		return "", "", fmt.Errorf("register guest: %w", err)
 	}
 
 	roomID := strings.TrimSpace(p.roomURL)
@@ -133,7 +139,7 @@ func (p *Peer) getRoomToken(ctx context.Context) (string, error) {
 	if roomID == "" || roomID == "any" {
 		roomID, err = createRoom(ctx, accessToken)
 		if err != nil {
-			return "", fmt.Errorf("create room: %w", err)
+			return "", "", fmt.Errorf("create room: %w", err)
 		}
 
 		log.Printf("WB Stream room created: %s", roomID)
@@ -145,32 +151,39 @@ func (p *Peer) getRoomToken(ctx context.Context) (string, error) {
 
 				createdRoomID, createErr := createRoom(ctx, accessToken, roomID)
 				if createErr != nil {
-					return "", fmt.Errorf("recreate fixed room failed room_id=%s: %w", roomID, createErr)
+					return "", "", fmt.Errorf("recreate fixed room failed room_id=%s: %w", roomID, createErr)
 				}
 
 				if createdRoomID != roomID {
-					return "", fmt.Errorf("recreate fixed room returned different id: want=%s got=%s", roomID, createdRoomID)
+					return "", "", fmt.Errorf("recreate fixed room returned different id: want=%s got=%s", roomID, createdRoomID)
 				}
 
 				time.Sleep(750 * time.Millisecond)
 
 				if joinErr := joinRoom(ctx, accessToken, roomID); joinErr != nil {
-					return "", fmt.Errorf("join recreated fixed room failed room_id=%s: %w", roomID, joinErr)
+					return "", "", fmt.Errorf("join recreated fixed room failed room_id=%s: %w", roomID, joinErr)
 				}
 
 				log.Printf("WB Stream fixed room recreated and joined: %s", roomID)
 			} else {
-				return "", fmt.Errorf("join room: %w", err)
+				return "", "", fmt.Errorf("join room: %w", err)
 			}
 		}
 	}
 
-	token, err := getToken(ctx, accessToken, roomID, p.name)
-	if err != nil {
-		return "", fmt.Errorf("get token: %w", err)
+	token, serverURL, err := getConnectionDetails(ctx, accessToken, roomID, p.name)
+	if err == nil {
+		return token, serverURL, nil
 	}
 
-	return token, nil
+	log.Printf("WB Stream connection-details failed, trying legacy token endpoint: %v", err)
+
+	token, err = getToken(ctx, accessToken, roomID, p.name)
+	if err != nil {
+		return "", "", fmt.Errorf("get token: %w", err)
+	}
+
+	return token, defaultWSURL, nil
 }
 
 func (p *Peer) processSendQueue() {

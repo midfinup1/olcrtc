@@ -51,6 +51,18 @@ type tokenResponse struct {
 	ConnectionToken string `json:"connectionToken"`
 }
 
+type connectionDetailsResponse struct {
+	RoomToken string `json:"roomToken"`
+	ServerURL string `json:"serverUrl"`
+	RTCConfig struct {
+		ICEServers []struct {
+			URLs       []string `json:"urls"`
+			Username   string   `json:"username"`
+			Credential string   `json:"credential"`
+		} `json:"iceServers"`
+	} `json:"rtcConfig"`
+}
+
 func registerGuest(ctx context.Context, displayName string) (string, error) {
 	u := apiBase + "/auth/api/v1/auth/user/guest-register"
 
@@ -189,6 +201,8 @@ func joinRoom(ctx context.Context, accessToken, roomID string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Linux x86_64)")
+	req.Header.Set("Origin", "https://stream.wb.ru")
+	req.Header.Set("Referer", "https://stream.wb.ru/room/"+roomID)
 
 	client := protect.NewHTTPClient()
 
@@ -209,7 +223,77 @@ func joinRoom(ctx context.Context, accessToken, roomID string) error {
 	return nil
 }
 
+func getConnectionDetails(ctx context.Context, accessToken, roomID, displayName string) (string, string, error) {
+	roomID = strings.TrimSpace(roomID)
+	displayName = strings.TrimSpace(displayName)
+
+	if roomID == "" {
+		return "", "", errors.New("room id is empty")
+	}
+
+	if displayName == "" {
+		displayName = "Linux"
+	}
+
+	u := fmt.Sprintf("%s/api-room-manager/v2/room/%s/connection-details", apiBase, roomID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("create request: %w", err)
+	}
+
+	q := req.URL.Query()
+	q.Add("deviceType", "PARTICIPANT_DEVICE_TYPE_WEB_DESKTOP")
+	q.Add("displayName", displayName)
+	req.URL.RawQuery = q.Encode()
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Linux x86_64)")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Referer", "https://stream.wb.ru/room/"+roomID)
+
+	client := protect.NewHTTPClient()
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("do request: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return "", "", fmt.Errorf("%w: %d %s", errGetToken, resp.StatusCode, b)
+	}
+
+	var res connectionDetailsResponse
+
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", "", fmt.Errorf("decode response: %w", err)
+	}
+
+	roomToken := strings.TrimSpace(res.RoomToken)
+	serverURL := strings.TrimSpace(res.ServerURL)
+
+	if roomToken == "" {
+		return "", "", errors.New("room token is empty")
+	}
+
+	if serverURL == "" {
+		return "", "", errors.New("server url is empty")
+	}
+
+	return roomToken, serverURL, nil
+}
+
 func getToken(ctx context.Context, accessToken, roomID, displayName string) (string, error) {
+	token, _, err := getConnectionDetails(ctx, accessToken, roomID, displayName)
+	if err == nil {
+		return token, nil
+	}
+
 	roomID = strings.TrimSpace(roomID)
 
 	if roomID == "" {
@@ -218,15 +302,14 @@ func getToken(ctx context.Context, accessToken, roomID, displayName string) (str
 
 	u := fmt.Sprintf("%s/api-room-manager/api/v1/room/%s/token", apiBase, roomID)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
+	req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if reqErr != nil {
+		return "", fmt.Errorf("create request: %w", reqErr)
 	}
 
 	q := req.URL.Query()
 	q.Add("deviceType", "PARTICIPANT_DEVICE_TYPE_WEB_DESKTOP")
 	q.Add("displayName", displayName)
-
 	req.URL.RawQuery = q.Encode()
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -235,9 +318,9 @@ func getToken(ctx context.Context, accessToken, roomID, displayName string) (str
 
 	client := protect.NewHTTPClient()
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("do request: %w", err)
+	resp, reqErr := client.Do(req)
+	if reqErr != nil {
+		return "", fmt.Errorf("do request: %w", reqErr)
 	}
 
 	defer func() {
@@ -246,79 +329,25 @@ func getToken(ctx context.Context, accessToken, roomID, displayName string) (str
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
-		body := string(b)
-
-		if resp.StatusCode == http.StatusNotImplemented ||
-			strings.Contains(body, "GetRoomToken not implemented") ||
-			strings.Contains(body, "method GetRoomToken not implemented") {
-			return getChatConnectionToken(ctx, accessToken)
-		}
-
-		return "", fmt.Errorf("%w: %d %s", errGetToken, resp.StatusCode, body)
+		return "", fmt.Errorf("%w: connection-details failed: %v; legacy token failed: %d %s", errGetToken, err, resp.StatusCode, b)
 	}
 
 	var res tokenResponse
 
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return "", fmt.Errorf("decode response: %w", err)
+	if reqErr := json.NewDecoder(resp.Body).Decode(&res); reqErr != nil {
+		return "", fmt.Errorf("decode response: %w", reqErr)
 	}
 
-	token := strings.TrimSpace(res.RoomToken)
-	if token == "" {
-		token = strings.TrimSpace(res.ConnectionToken)
+	legacyToken := strings.TrimSpace(res.RoomToken)
+	if legacyToken == "" {
+		legacyToken = strings.TrimSpace(res.ConnectionToken)
 	}
 
-	if token == "" {
+	if legacyToken == "" {
 		return "", errors.New("room token is empty")
 	}
 
-	return token, nil
-}
-
-func getChatConnectionToken(ctx context.Context, accessToken string) (string, error) {
-	u := apiBase + "/api-chat/api/v1/connection-token"
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Linux x86_64)")
-	req.Header.Set("Accept", "*/*")
-
-	client := protect.NewHTTPClient()
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("do request: %w", err)
-	}
-
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("%w: %d %s", errGetToken, resp.StatusCode, b)
-	}
-
-	var res tokenResponse
-
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return "", fmt.Errorf("decode response: %w", err)
-	}
-
-	token := strings.TrimSpace(res.ConnectionToken)
-	if token == "" {
-		token = strings.TrimSpace(res.RoomToken)
-	}
-
-	if token == "" {
-		return "", errors.New("connection token is empty")
-	}
-
-	return token, nil
+	return legacyToken, nil
 }
 
 func isWBRoomNotFoundError(err error) bool {
