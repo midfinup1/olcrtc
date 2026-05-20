@@ -110,6 +110,10 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 
 	defer server.stopAllPersonalProcesses()
 
+	if strings.EqualFold(cfg.CarrierName, "wbstream") {
+		return server.runChatBootstrapLoop(ctx)
+	}
+
 	return server.runBootstrapLoop(ctx)
 }
 
@@ -230,7 +234,6 @@ func (s *Server) saveStoreLocked() error {
 
 func (s *Server) ensureKnownClientsRunning(ctx context.Context) error {
 	s.mu.Lock()
-
 	records := make([]ClientRecord, 0, len(s.store.Clients))
 
 	for _, record := range s.store.Clients {
@@ -245,20 +248,171 @@ func (s *Server) ensureKnownClientsRunning(ctx context.Context) error {
 		if err := s.ensurePersonalProcess(ctx, record); err != nil {
 			logger.Warnf("failed to start personal room for client=%s: %v", record.ClientID, err)
 		}
-
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(750 * time.Millisecond):
-		}
 	}
 
 	return nil
 }
 
-func (s *Server) runBootstrapLoop(ctx context.Context) error {
-	delay := 5 * time.Second
+func (s *Server) runChatBootstrapLoop(ctx context.Context) error {
+	delay := 2 * time.Second
 
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+
+		default:
+		}
+
+		err := s.runOneChatBootstrap(ctx)
+
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if err != nil {
+			logger.Warnf("chat bootstrap stopped: %v", err)
+		}
+
+		time.Sleep(delay)
+
+		if delay < 30*time.Second {
+			delay *= 2
+		}
+	}
+}
+
+func (s *Server) runOneChatBootstrap(ctx context.Context) error {
+	displayName := "BareBone Bootstrap Server"
+
+	transport := NewChatBootstrapTransport("", s.cfg.BootstrapRoom, displayName)
+
+	if err := transport.Connect(ctx); err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = transport.Close()
+	}()
+
+	transport.StartKeepAlive(ctx)
+
+	logger.Infof("chat bootstrap server ready room=%s", s.cfg.BootstrapRoom)
+
+	return transport.ReadEncryptedLoop(ctx, func(encrypted []byte) {
+		go func() {
+			response, err := s.handleBootstrapEncrypted(ctx, encrypted)
+			if err != nil {
+				logger.Warnf("chat bootstrap request handling error: %v", err)
+				return
+			}
+
+			if len(response) == 0 {
+				return
+			}
+
+			if err := transport.SendEncrypted(ctx, response); err != nil {
+				logger.Warnf("chat bootstrap response send error: %v", err)
+			}
+		}()
+	})
+}
+
+func (s *Server) handleBootstrapEncrypted(ctx context.Context, encrypted []byte) ([]byte, error) {
+	plaintext, err := s.cipher.decrypt(encrypted)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap decrypt failed: %w", err)
+	}
+
+	var request Request
+	if err := json.Unmarshal(plaintext, &request); err != nil {
+		return s.makeEncryptedErrorResponse("invalid request json")
+	}
+
+	if request.Type != MessageRegister && request.Type != MessageRotateRoom {
+		return nil, nil
+	}
+
+	if strings.TrimSpace(request.Token) != s.cfg.BootstrapToken {
+		logger.Warnf("bootstrap rejected invalid token client_id=%s", request.ClientID)
+		return s.makeEncryptedErrorResponse("invalid token")
+	}
+
+	clientID := strings.TrimSpace(request.ClientID)
+	if clientID == "" {
+		return s.makeEncryptedErrorResponse("client_id is empty")
+	}
+
+	if !isSafeClientID(clientID) {
+		return s.makeEncryptedErrorResponse("client_id contains invalid characters")
+	}
+
+	var record ClientRecord
+
+	switch request.Type {
+	case MessageRegister:
+		record, err = s.getOrCreateClient(ctx, clientID)
+		if err != nil {
+			return s.makeEncryptedErrorResponse(err.Error())
+		}
+
+		if err := s.ensurePersonalProcess(ctx, record); err != nil {
+			return s.makeEncryptedErrorResponse(err.Error())
+		}
+
+	case MessageRotateRoom:
+		record, err = s.rotateClient(ctx, clientID)
+		if err != nil {
+			return s.makeEncryptedErrorResponse(err.Error())
+		}
+
+		if err := s.ensurePersonalProcess(ctx, record); err != nil {
+			return s.makeEncryptedErrorResponse(err.Error())
+		}
+
+	default:
+		return nil, nil
+	}
+
+	response := Response{
+		Type:          MessageConfig,
+		ClientID:      record.ClientID,
+		Provider:      record.Provider,
+		RoomID:        record.RoomID,
+		EncryptionKey: record.EncryptionKey,
+		Transport:     record.Transport,
+		DNSServer:     record.DNSServer,
+	}
+
+	return s.encryptResponse(response)
+}
+
+func (s *Server) makeEncryptedErrorResponse(message string) ([]byte, error) {
+	response := Response{
+		Type:    MessageError,
+		Message: message,
+	}
+
+	return s.encryptResponse(response)
+}
+
+func (s *Server) encryptResponse(response Response) ([]byte, error) {
+	raw, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("marshal bootstrap response failed: %w", err)
+	}
+
+	encrypted, err := s.cipher.encrypt(raw)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt bootstrap response failed: %w", err)
+	}
+
+	logger.Infof("bootstrap response prepared type=%s client_id=%s", response.Type, response.ClientID)
+
+	return encrypted, nil
+}
+
+func (s *Server) runBootstrapLoop(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -277,29 +431,7 @@ func (s *Server) runBootstrapLoop(ctx context.Context) error {
 			logger.Warnf("bootstrap link stopped: %v", err)
 		}
 
-		if err == nil {
-			delay = 5 * time.Second
-		} else if isRateLimitLikeError(err) {
-			if delay < 60*time.Second {
-				delay = 60 * time.Second
-			}
-		}
-
-		logger.Infof("bootstrap reconnect delay=%s", delay)
-
-		select {
-		case <-ctx.Done():
-			return nil
-
-		case <-time.After(delay):
-		}
-
-		if err != nil {
-			delay *= 2
-			if delay > 2*time.Minute {
-				delay = 2 * time.Minute
-			}
-		}
+		time.Sleep(2 * time.Second)
 	}
 }
 
@@ -370,7 +502,6 @@ func (s *Server) handleBootstrapData(ctx context.Context, ln link.Link, data []b
 	}
 
 	var request Request
-
 	if err := json.Unmarshal(plaintext, &request); err != nil {
 		return s.sendError(ctx, ln, "invalid request json")
 	}
@@ -381,7 +512,6 @@ func (s *Server) handleBootstrapData(ctx context.Context, ln link.Link, data []b
 	}
 
 	clientID := strings.TrimSpace(request.ClientID)
-
 	if clientID == "" {
 		return s.sendError(ctx, ln, "client_id is empty")
 	}
@@ -713,12 +843,10 @@ func (s *Server) watchPersonalProcess(ctx context.Context, record ClientRecord) 
 	}
 
 	s.mu.Lock()
-
 	current := s.processes[record.ClientID]
 	if current == process {
 		delete(s.processes, record.ClientID)
 	}
-
 	s.mu.Unlock()
 
 	if ctx.Err() != nil {
@@ -727,18 +855,7 @@ func (s *Server) watchPersonalProcess(ctx context.Context, record ClientRecord) 
 
 	logger.Warnf("personal server exited client_id=%s room_id=%s err=%v", record.ClientID, record.RoomID, err)
 
-	delay := 10 * time.Second
-
-	if isRateLimitLikeError(err) {
-		delay = 60 * time.Second
-	}
-
-	select {
-	case <-ctx.Done():
-		return
-
-	case <-time.After(delay):
-	}
+	time.Sleep(2 * time.Second)
 
 	s.mu.Lock()
 	stored, ok := s.store.Clients[record.ClientID]
@@ -755,12 +872,10 @@ func (s *Server) watchPersonalProcess(ctx context.Context, record ClientRecord) 
 
 func (s *Server) stopPersonalProcess(clientID string) {
 	s.mu.Lock()
-
 	process := s.processes[clientID]
 	if process != nil {
 		delete(s.processes, clientID)
 	}
-
 	s.mu.Unlock()
 
 	if process == nil {
@@ -782,7 +897,6 @@ func (s *Server) stopPersonalProcess(clientID string) {
 
 func (s *Server) stopAllPersonalProcesses() {
 	s.mu.Lock()
-
 	clientIDs := make([]string, 0, len(s.processes))
 
 	for clientID := range s.processes {
@@ -952,15 +1066,4 @@ func waitRoomIDFromLog(ctx context.Context, logPath string, timeout time.Duratio
 			_ = file.Close()
 		}
 	}
-}
-
-func isRateLimitLikeError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	text := strings.ToLower(err.Error())
-
-	return strings.Contains(text, "429") ||
-		strings.Contains(text, "too many requests")
 }
