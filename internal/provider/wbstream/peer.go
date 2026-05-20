@@ -109,6 +109,31 @@ func (p *Peer) Connect(ctx context.Context) error {
 
 	log.Printf("WB Stream connected room=%s local_identity=%s", p.roomURL, room.LocalParticipant.Identity())
 
+	go func() {
+		time.Sleep(3 * time.Second)
+
+		testData := []byte("bb-test-ping")
+
+		if p.closed.Load() {
+			log.Printf("WB Stream test publish skipped: peer closed")
+			return
+		}
+
+		if p.room == nil || p.room.LocalParticipant == nil {
+			log.Printf("WB Stream test publish skipped: %v", ErrLiveKitNotConnected)
+			return
+		}
+
+		if err := p.room.LocalParticipant.PublishDataPacket(
+			lksdk.UserData(testData),
+			lksdk.WithDataPublishReliable(true),
+		); err != nil {
+			log.Printf("WB Stream test publish error: %v", err)
+		} else {
+			log.Printf("WB Stream test publish ok len=%d", len(testData))
+		}
+	}()
+
 	if err := p.publishPendingTracks(); err != nil {
 		return err
 	}
