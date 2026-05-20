@@ -231,6 +231,61 @@ func getToken(ctx context.Context, accessToken, roomID, displayName string) (str
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Linux x86_64)")
+	req.Header.Set("Accept", "*/*")
+
+	client := protect.NewHTTPClient()
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("do request: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		body := string(b)
+
+		if resp.StatusCode == http.StatusNotImplemented ||
+			strings.Contains(body, "GetRoomToken not implemented") ||
+			strings.Contains(body, "method GetRoomToken not implemented") {
+			return getChatConnectionToken(ctx, accessToken)
+		}
+
+		return "", fmt.Errorf("%w: %d %s", errGetToken, resp.StatusCode, body)
+	}
+
+	var res tokenResponse
+
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+
+	token := strings.TrimSpace(res.RoomToken)
+	if token == "" {
+		token = strings.TrimSpace(res.ConnectionToken)
+	}
+
+	if token == "" {
+		return "", errors.New("room token is empty")
+	}
+
+	return token, nil
+}
+
+func getChatConnectionToken(ctx context.Context, accessToken string) (string, error) {
+	u := apiBase + "/api-chat/api/v1/connection-token"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Linux x86_64)")
+	req.Header.Set("Accept", "*/*")
 
 	client := protect.NewHTTPClient()
 
@@ -254,13 +309,13 @@ func getToken(ctx context.Context, accessToken, roomID, displayName string) (str
 		return "", fmt.Errorf("decode response: %w", err)
 	}
 
-	token := strings.TrimSpace(res.RoomToken)
+	token := strings.TrimSpace(res.ConnectionToken)
 	if token == "" {
-		token = strings.TrimSpace(res.ConnectionToken)
+		token = strings.TrimSpace(res.RoomToken)
 	}
 
 	if token == "" {
-		return "", errors.New("room token is empty")
+		return "", errors.New("connection token is empty")
 	}
 
 	return token, nil
@@ -284,8 +339,8 @@ func isWBRateLimitError(err error) bool {
 		return false
 	}
 
-	text := err.Error()
+	text := strings.ToLower(err.Error())
 
 	return strings.Contains(text, "429") ||
-		strings.Contains(strings.ToLower(text), "too many requests")
+		strings.Contains(text, "too many requests")
 }
