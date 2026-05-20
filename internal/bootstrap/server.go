@@ -230,6 +230,7 @@ func (s *Server) saveStoreLocked() error {
 
 func (s *Server) ensureKnownClientsRunning(ctx context.Context) error {
 	s.mu.Lock()
+
 	records := make([]ClientRecord, 0, len(s.store.Clients))
 
 	for _, record := range s.store.Clients {
@@ -244,12 +245,20 @@ func (s *Server) ensureKnownClientsRunning(ctx context.Context) error {
 		if err := s.ensurePersonalProcess(ctx, record); err != nil {
 			logger.Warnf("failed to start personal room for client=%s: %v", record.ClientID, err)
 		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(750 * time.Millisecond):
+		}
 	}
 
 	return nil
 }
 
 func (s *Server) runBootstrapLoop(ctx context.Context) error {
+	delay := 5 * time.Second
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -268,7 +277,29 @@ func (s *Server) runBootstrapLoop(ctx context.Context) error {
 			logger.Warnf("bootstrap link stopped: %v", err)
 		}
 
-		time.Sleep(2 * time.Second)
+		if err == nil {
+			delay = 5 * time.Second
+		} else if isRateLimitLikeError(err) {
+			if delay < 60*time.Second {
+				delay = 60 * time.Second
+			}
+		}
+
+		logger.Infof("bootstrap reconnect delay=%s", delay)
+
+		select {
+		case <-ctx.Done():
+			return nil
+
+		case <-time.After(delay):
+		}
+
+		if err != nil {
+			delay *= 2
+			if delay > 2*time.Minute {
+				delay = 2 * time.Minute
+			}
+		}
 	}
 }
 
@@ -339,6 +370,7 @@ func (s *Server) handleBootstrapData(ctx context.Context, ln link.Link, data []b
 	}
 
 	var request Request
+
 	if err := json.Unmarshal(plaintext, &request); err != nil {
 		return s.sendError(ctx, ln, "invalid request json")
 	}
@@ -349,6 +381,7 @@ func (s *Server) handleBootstrapData(ctx context.Context, ln link.Link, data []b
 	}
 
 	clientID := strings.TrimSpace(request.ClientID)
+
 	if clientID == "" {
 		return s.sendError(ctx, ln, "client_id is empty")
 	}
@@ -680,10 +713,12 @@ func (s *Server) watchPersonalProcess(ctx context.Context, record ClientRecord) 
 	}
 
 	s.mu.Lock()
+
 	current := s.processes[record.ClientID]
 	if current == process {
 		delete(s.processes, record.ClientID)
 	}
+
 	s.mu.Unlock()
 
 	if ctx.Err() != nil {
@@ -692,7 +727,18 @@ func (s *Server) watchPersonalProcess(ctx context.Context, record ClientRecord) 
 
 	logger.Warnf("personal server exited client_id=%s room_id=%s err=%v", record.ClientID, record.RoomID, err)
 
-	time.Sleep(2 * time.Second)
+	delay := 10 * time.Second
+
+	if isRateLimitLikeError(err) {
+		delay = 60 * time.Second
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+
+	case <-time.After(delay):
+	}
 
 	s.mu.Lock()
 	stored, ok := s.store.Clients[record.ClientID]
@@ -709,10 +755,12 @@ func (s *Server) watchPersonalProcess(ctx context.Context, record ClientRecord) 
 
 func (s *Server) stopPersonalProcess(clientID string) {
 	s.mu.Lock()
+
 	process := s.processes[clientID]
 	if process != nil {
 		delete(s.processes, clientID)
 	}
+
 	s.mu.Unlock()
 
 	if process == nil {
@@ -734,6 +782,7 @@ func (s *Server) stopPersonalProcess(clientID string) {
 
 func (s *Server) stopAllPersonalProcesses() {
 	s.mu.Lock()
+
 	clientIDs := make([]string, 0, len(s.processes))
 
 	for clientID := range s.processes {
@@ -903,4 +952,15 @@ func waitRoomIDFromLog(ctx context.Context, logPath string, timeout time.Duratio
 			_ = file.Close()
 		}
 	}
+}
+
+func isRateLimitLikeError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	text := strings.ToLower(err.Error())
+
+	return strings.Contains(text, "429") ||
+		strings.Contains(text, "too many requests")
 }
