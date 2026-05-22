@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -25,6 +26,7 @@ const (
 
 type Client struct {
 	accessToken string
+	cookie      string
 	httpClient  *http.Client
 	nextID      atomic.Int64
 }
@@ -32,6 +34,7 @@ type Client struct {
 func NewClient(accessToken string) *Client {
 	c := &Client{
 		accessToken: strings.TrimSpace(accessToken),
+		cookie:      strings.TrimSpace(os.Getenv("WB_COOKIE")),
 		httpClient:  protect.NewHTTPClient(),
 	}
 
@@ -298,6 +301,10 @@ func (c *Client) ConnectWebSocket(ctx context.Context, roomID string) (*websocke
 	headers.Set("User-Agent", "Mozilla/5.0 (Linux x86_64)")
 	headers.Set("Referer", "https://stream.wb.ru/room/"+roomID)
 
+	if c.cookie != "" {
+		headers.Set("Cookie", c.cookie)
+	}
+
 	if c.accessToken != "" {
 		headers.Set("Authorization", "Bearer "+c.accessToken)
 	}
@@ -420,6 +427,7 @@ func (c *Client) ReadLoop(ctx context.Context, conn *websocket.Conn, onText func
 		select {
 		case <-ctx.Done():
 			return nil
+
 		default:
 		}
 
@@ -473,6 +481,7 @@ func (c *Client) waitCommandAck(ctx context.Context, conn *websocket.Conn, comma
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+
 		default:
 		}
 
@@ -553,6 +562,10 @@ func (c *Client) setHTTPHeaders(req *http.Request, roomID string) {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Linux x86_64)")
 	req.Header.Set("Origin", "https://stream.wb.ru")
 	req.Header.Set("Referer", "https://stream.wb.ru/room/"+roomID)
+
+	if c.cookie != "" {
+		req.Header.Set("Cookie", c.cookie)
+	}
 
 	if c.accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.accessToken)
