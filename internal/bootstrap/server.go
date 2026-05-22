@@ -283,7 +283,7 @@ func (s *Server) runChatBootstrapLoop(ctx context.Context) error {
 }
 
 func (s *Server) runOneChatBootstrap(ctx context.Context) error {
-	displayName := "BareBone Bootstrap Server"
+	displayName := "Kolya Banan"
 
 	accessToken := strings.TrimSpace(os.Getenv("WB_ACCESS_TOKEN"))
 
